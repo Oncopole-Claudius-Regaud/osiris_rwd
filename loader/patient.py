@@ -18,7 +18,7 @@ def split_birthdate(date_str):
 
 
 def load():
-    hook = PostgresHook(postgres_conn_id="osrisis_rw")
+    hook = PostgresHook(postgres_conn_id="postgres_test")
     conn = hook.get_conn()
     cur = conn.cursor()
 
@@ -28,7 +28,7 @@ def load():
     }
 
     sql = """
-        INSERT INTO osrisis_rwd.patient (
+        INSERT INTO osiris_rwd.patient (
             patientid,
             birthdateday,
             birthdatemonth,

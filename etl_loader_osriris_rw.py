@@ -17,7 +17,7 @@ with DAG(
     start_date=datetime(2025, 1, 1),
     schedule_interval=None,
     catchup=False,
-    tags=["osrisis", "load"]
+    tags=["osiris_rw", "load"]
 ) as dag:
 
     load_patient_task = PythonOperator(
