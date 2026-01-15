@@ -4,11 +4,13 @@ import os
 from pathlib import Path
 from airflow.operators.python import PythonOperator
 from datetime import datetime
-
-BASE_DIR = Path(__file__).resolve().parent
-sys.path.append(str(BASE_DIR / "loader"))
-
-from loader.patient import load  
+dag_folder = os.path.dirname(os.path.abspath(__file__))
+if dag_folder not in sys.path:
+    sys.path.insert(0, dag_folder)
+loader_folder = os.path.join(dag_folder, "loader")
+if loader_folder not in sys.path:
+    sys.path.insert(0, loader_folder)
+from patient import load
 
 with DAG(
     dag_id="osrisis_rw_loader",
