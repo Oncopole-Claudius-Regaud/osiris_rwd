@@ -1,9 +1,9 @@
-name: Alimentation schema ONCDOS 
+name: Alimentation schema ONCDOS
 
 on:
   push:
     branches:
-      - main
+      - patient_osiris
 
 jobs:
   deploy:
@@ -12,20 +12,16 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Update repo on server
+      - name: Deploy DAGs to Airflow
         run: |
           set -e
 
           TARGET="$HOME/airflow/dags/osiris_rwd"
           mkdir -p "$TARGET"
 
-          echo "Deploying files to $TARGET"
+          echo "Deploying DAGs to $TARGET"
 
-          git ls-files | while read file; do
-            mkdir -p "$TARGET/$(dirname "$file")"
-            cp "$file" "$TARGET/$file"
-          done
+          # rsync synchronise et supprime les fichiers obsolètes
+          rsync -av --delete ./ "$TARGET/"
 
           echo "Deployment finished"
-
