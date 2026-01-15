@@ -42,7 +42,7 @@ def load():
             birthdatemonth = EXCLUDED.birthdatemonth,
             birthdateyear = EXCLUDED.birthdateyear,
             biologicalsex = EXCLUDED.biologicalsex,
-            patientupdatedate = COALESCE(NULLIF(EXCLUDED.patientupdate, ''), osiris_rwd.patient.patientupdate);
+            patientupdatedate = EXCLUDED.patientupdate;
     """
 
     with open(FILE_PATH, "r") as f:
