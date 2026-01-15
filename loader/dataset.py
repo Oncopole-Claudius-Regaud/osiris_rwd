@@ -12,10 +12,10 @@ def update_dataset():
     projet_default = "devloppement osiris_rwd"
 
     sql = """
-        INSERT INTO osiris_rwd.dataset (origincenterid, datasetupdatedate)
+        INSERT INTO osiris_rwd.dataset (datasetid,origincenterid, datasetupdatedate)
         VALUES (%s, %s, %s)
     """
-    cursor.execute(sql, (valeur_col2, today_str,projet_default))
+    cursor.execute(sql, (projet_default,valeur_col2, today_str,))
     conn.commit()
     cursor.close()
     conn.close()
