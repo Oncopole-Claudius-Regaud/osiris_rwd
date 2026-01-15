@@ -1,7 +1,11 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime
-from loader.patient import load  # import direct de ta fonction
+
+BASE_DIR = Path(__file__).resolve().parent
+sys.path.append(str(BASE_DIR / "loader"))
+
+from loader.patient import load  
 
 with DAG(
     dag_id="osrisis_rw_loader",
