@@ -12,6 +12,7 @@ if loader_folder not in sys.path:
     sys.path.insert(0, loader_folder)
 from patient import load
 from dataset import update_dataset
+from lastnews import load_lastnews
 
 with DAG(
     dag_id="osrisis_rw_loader",
@@ -30,6 +31,10 @@ with DAG(
         task_id="load_patient",
         python_callable=load
     )
+    load_lastnews_task = PythonOperator(
+        task_id="load_lastnews",
+        python_callable=load_lastnews
+    )
 
 
-    update_dataset_task >> load_patient_task 
+    update_dataset_task >> load_patient_task >> load_lastnews_task
