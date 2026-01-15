@@ -12,7 +12,7 @@ def update_dataset():
 
     # UPDATE ou INSERT selon ton besoin
     sql = """
-        UPDATE dataset
+        UPDATE osiris_rwd.dataset
         SET col2 = %s,
             col3 = %s
     """
