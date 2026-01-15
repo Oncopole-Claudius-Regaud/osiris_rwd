@@ -42,7 +42,7 @@ def load():
             birthdatemonth = EXCLUDED.birthdatemonth,
             birthdateyear = EXCLUDED.birthdateyear,
             biologicalsex = EXCLUDED.biologicalsex,
-            patientupdatedate = EXCLUDED.patientupdate;
+            patientupdate = EXCLUDED.patientupdate;
     """
 
     with open(FILE_PATH, "r") as f:
