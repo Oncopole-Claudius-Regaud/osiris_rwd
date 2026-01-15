@@ -9,12 +9,13 @@ def update_dataset():
 
     today_str = date.today().strftime("%Y-%m-%d")
     valeur_col2 = "310782347"
+    projet_default = "devloppement osiris_rwd"
 
     sql = """
         INSERT INTO osiris_rwd.dataset (origincenterid, datasetupdatedate)
-        VALUES (%s, %s)
+        VALUES (%s, %s, %s)
     """
-    cursor.execute(sql, (valeur_col2, today_str))
+    cursor.execute(sql, (valeur_col2, today_str,projet_default))
     conn.commit()
     cursor.close()
     conn.close()
