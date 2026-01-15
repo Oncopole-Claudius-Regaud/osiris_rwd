@@ -11,6 +11,7 @@ loader_folder = os.path.join(dag_folder, "loader")
 if loader_folder not in sys.path:
     sys.path.insert(0, loader_folder)
 from patient import load
+from dataset import update_dataset
 
 with DAG(
     dag_id="osrisis_rw_loader",
@@ -20,7 +21,15 @@ with DAG(
     tags=["osiris_rw", "load"]
 ) as dag:
 
+    update_dataset_task = PythonOperator(
+        task_id="update_dataset",
+        python_callable=update_dataset
+    )
+
     load_patient_task = PythonOperator(
         task_id="load_patient",
         python_callable=load
     )
+
+
+    update_dataset_task >> load_patient_task 
