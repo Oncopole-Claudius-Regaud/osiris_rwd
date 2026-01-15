@@ -25,3 +25,7 @@ jobs:
           rsync -av --delete ./ "$TARGET/"
 
           echo "Deployment finished"
+      - name: Redémarrer Airflow
+        run: |
+          sudo systemctl restart airflow-webserver.service
+          sudo systemctl restart airflow-scheduler.service
