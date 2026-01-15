@@ -13,8 +13,8 @@ def update_dataset():
     # UPDATE ou INSERT selon ton besoin
     sql = """
         UPDATE osiris_rwd.dataset
-        SET col2 = %s,
-            col3 = %s
+        SET origincenterid = %s,
+            datasetupdatedate = %s
     """
     cursor.execute(sql, (valeur_col2, today_str))
     conn.commit()
