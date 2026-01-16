@@ -17,7 +17,7 @@ def load_lastnews():
     # --------------------
     select_sql = """
         SELECT
-            ipp_ocr,
+            ipp_ocr as patientid,
             date_of_death,
             date_derniere_nouvelle
         FROM datamart_oeci_survie.v_date_derniere_nouvelle_combinee
@@ -32,7 +32,7 @@ def load_lastnews():
     # --------------------
     insert_sql = """
         INSERT INTO osiris_rwd.lastnews (
-            ipp_ocr,
+            patientid,
             lastnewsid,
             vitalstatus,
             vitalstatusupdateday,
@@ -48,7 +48,7 @@ def load_lastnews():
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
 
-    for ipp_ocr, date_of_death, date_derniere_nouvelle in rows:
+    for patientid, date_of_death, date_derniere_nouvelle in rows:
         vitalstatus = "vivant" if date_of_death is None else "décédé"
 
         death_day = date_of_death.day if date_of_death else None
@@ -62,7 +62,7 @@ def load_lastnews():
         cur.execute(
             insert_sql,
             (
-                ipp_ocr,                # ipp_ocr
+                patientid,                # ipp_ocr
                 "",                        # lastnewsid
                 vitalstatus,
                 today.day,
