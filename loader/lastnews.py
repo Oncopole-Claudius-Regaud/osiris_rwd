@@ -17,7 +17,7 @@ def load_lastnews():
     # --------------------
     select_sql = """
         SELECT
-            patientid,
+            ipp_ocr,
             date_of_death,
             date_derniere_nouvelle
         FROM datamart_oeci_survie.v_date_derniere_nouvelle_combinee
@@ -48,7 +48,7 @@ def load_lastnews():
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
 
-    for patientid, date_of_death, date_derniere_nouvelle in rows:
+    for ipp_ocr, date_of_death, date_derniere_nouvelle in rows:
         vitalstatus = "vivant" if date_of_death is None else "décédé"
 
         death_day = date_of_death.day if date_of_death else None
@@ -62,7 +62,7 @@ def load_lastnews():
         cur.execute(
             insert_sql,
             (
-                patientid,                # ipp_ocr
+                ipp_ocr,                # ipp_ocr
                 "",                        # lastnewsid
                 vitalstatus,
                 today.day,
