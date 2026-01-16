@@ -1,87 +1,82 @@
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from datetime import date
-import pandas as pd
 
 
 def load_lastnews():
     hook = PostgresHook(postgres_conn_id="postgres_test")
-    engine = hook.get_sqlalchemy_engine()
+    conn = hook.get_conn()
+    cur = conn.cursor()
+
+    # --------------------
+    # TRUNCATE
+    # --------------------
+    cur.execute("TRUNCATE TABLE osiris_rwd.lastnews")
 
     # --------------------
     # Lecture source
     # --------------------
-    query = """
+    select_sql = """
         SELECT
             patientid,
             date_of_death,
             date_derniere_nouvelle
         FROM datamart_oeci_survie.v_date_derniere_nouvelle_combinee
     """
-    df = pd.read_sql(query, engine)
+    cur.execute(select_sql)
+    rows = cur.fetchall()
 
     today = date.today()
 
     # --------------------
-    # Colonnes fixes
+    # INSERT
     # --------------------
-    df["ipp_ocr"] = df["patientid"]
-    df["lastnewsid"] = ""
+    insert_sql = """
+        INSERT INTO osiris_rwd.lastnews (
+            ipp_ocr,
+            lastnewsid,
+            vitalstatus,
+            vitalstatusupdateday,
+            vitalstatusupdatemonth,
+            vitalstatusupdateyear,
+            deathdateday,
+            deathdatemonth,
+            deathdateyear,
+            lastvisitdateday,
+            lastvisitdatemonth,
+            lastvisitdateyear
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """
 
-    # --------------------
-    # Vital status
-    # --------------------
-    df["vitalstatus"] = df["date_of_death"].apply(
-        lambda x: "vivant" if pd.isna(x) else "décédé"
-    )
+    for patientid, date_of_death, date_derniere_nouvelle in rows:
+        vitalstatus = "vivant" if date_of_death is None else "décédé"
 
-    df["vitalstatusupdateday"] = today.day
-    df["vitalstatusupdatemonth"] = today.month
-    df["vitalstatusupdateyear"] = today.year
+        death_day = date_of_death.day if date_of_death else None
+        death_month = date_of_death.month if date_of_death else None
+        death_year = date_of_death.year if date_of_death else None
 
-    # --------------------
-    # Death date (si existe)
-    # --------------------
-    df["deathdateday"] = df["date_of_death"].dt.day
-    df["deathdatemonth"] = df["date_of_death"].dt.month
-    df["deathdateyear"] = df["date_of_death"].dt.year
+        last_day = date_derniere_nouvelle.day if date_derniere_nouvelle else None
+        last_month = date_derniere_nouvelle.month if date_derniere_nouvelle else None
+        last_year = date_derniere_nouvelle.year if date_derniere_nouvelle else None
 
-    # --------------------
-    # Last visit date
-    # --------------------
-    df["lastvisitdateday"] = df["date_derniere_nouvelle"].dt.day
-    df["lastvisitdatemonth"] = df["date_derniere_nouvelle"].dt.month
-    df["lastvisitdateyear"] = df["date_derniere_nouvelle"].dt.year
+        cur.execute(
+            insert_sql,
+            (
+                patientid,                # ipp_ocr
+                "",                        # lastnewsid
+                vitalstatus,
+                today.day,
+                today.month,
+                today.year,
+                death_day,
+                death_month,
+                death_year,
+                last_day,
+                last_month,
+                last_year,
+            )
+        )
 
-    # --------------------
-    # Colonnes finales
-    # --------------------
-    df_final = df[
-        [
-            "ipp_ocr",
-            "lastnewsid",
-            "vitalstatus",
-            "vitalstatusupdateday",
-            "vitalstatusupdatemonth",
-            "vitalstatusupdateyear",
-            "deathdateday",
-            "deathdatemonth",
-            "deathdateyear",
-            "lastvisitdateday",
-            "lastvisitdatemonth",
-            "lastvisitdateyear",
-        ]
-    ]
-
-    # --------------------
-    # TRUNCATE + RELOAD
-    # --------------------
-    with engine.begin() as conn:
-        conn.execute("TRUNCATE TABLE osiris_rwd.lastnews")
-
-    df_final.to_sql(
-        name="lastnews",
-        con=engine,
-        schema="osiris_rwd",
-        if_exists="append",
-        index=False
-    )
+    conn.commit()
+    cur.close()
+    conn.close()
