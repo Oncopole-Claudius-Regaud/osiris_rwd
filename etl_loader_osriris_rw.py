@@ -13,6 +13,8 @@ if loader_folder not in sys.path:
 from patient import load
 from dataset import update_dataset
 from lastnews import load_lastnews
+from opposition import load_opposition
+from relatedpathology import load_relatedpathology
 
 with DAG(
     dag_id="osrisis_rw_loader",
@@ -36,5 +38,15 @@ with DAG(
         python_callable=load_lastnews
     )
 
+    load_opposition_task = PythonOperator(
+        task_id="load_opposition",
+        python_callable=load_opposition
+    )
 
-    update_dataset_task >> load_patient_task >> load_lastnews_task
+    load_relatedpathology_task = PythonOperator(
+        task_id="load_relatedpathology",
+        python_callable=load_relatedpathology
+    )
+
+    update_dataset_task >> load_patient_task
+    load_patient_task >> [load_lastnews_task, load_opposition_task, load_relatedpathology_task]
