@@ -11,14 +11,26 @@ def update_dataset():
     conn = hook.get_conn()
     cursor = conn.cursor()
 
-    sql = """
-        INSERT INTO osiris_rwd.dataset (datasetid, origincenterid, datasetupdatedate)
-        VALUES (%s, %s, %s)
-        ON CONFLICT (datasetid) DO UPDATE SET
-            origincenterid = EXCLUDED.origincenterid,
-            datasetupdatedate = EXCLUDED.datasetupdatedate;
+    update_sql = """
+        UPDATE osiris_rwd.dataset
+        SET origincenterid = %s,
+            datasetupdatedate = %s
+        WHERE datasetid = %s
     """
-    cursor.execute(sql, (DATASET_ID, ORIGIN_CENTER_ID, date.today()))
+
+    insert_sql = """
+        INSERT INTO osiris_rwd.dataset (datasetid, origincenterid, datasetupdatedate)
+        SELECT %s, %s, %s
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM osiris_rwd.dataset
+            WHERE datasetid = %s
+        )
+    """
+
+    today = date.today()
+    cursor.execute(update_sql, (ORIGIN_CENTER_ID, today, DATASET_ID))
+    cursor.execute(insert_sql, (DATASET_ID, ORIGIN_CENTER_ID, today, DATASET_ID))
     conn.commit()
     cursor.close()
     conn.close()
