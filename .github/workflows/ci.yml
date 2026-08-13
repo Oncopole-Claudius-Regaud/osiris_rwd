@@ -83,6 +83,38 @@ jobs:
           git -C "$TARGET" status --short --branch
           git -C "$TARGET" rev-parse HEAD
 
+      - name: Copy OSIRIS RWD extraction scripts to srvlakehouse
+        shell: bash
+        env:
+          SRVLAKEHOUSE_USER: ${{ secrets.SRVLAKEHOUSE_USER }}
+          SRVLAKEHOUSE_PASSWORD: ${{ secrets.SRVLAKEHOUSE_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          REMOTE_HOST="srvlakehouse"
+          REMOTE_DIR="/opt/extract_osiris_rwd/scripts"
+          FILES_TO_COPY=(
+            "scripts/extract_riskfactor_by_ipp.py"
+          )
+
+          [ -n "${SRVLAKEHOUSE_USER:-}" ] || { echo "Erreur: secret SRVLAKEHOUSE_USER manquant"; exit 1; }
+          [ -n "${SRVLAKEHOUSE_PASSWORD:-}" ] || { echo "Erreur: secret SRVLAKEHOUSE_PASSWORD manquant"; exit 1; }
+          command -v sshpass >/dev/null 2>&1 || { echo "Erreur: sshpass n'est pas installe sur le runner"; exit 1; }
+          command -v ssh >/dev/null 2>&1 || { echo "Erreur: ssh n'est pas installe sur le runner"; exit 1; }
+          command -v scp >/dev/null 2>&1 || { echo "Erreur: scp n'est pas installe sur le runner"; exit 1; }
+
+          SSH_TARGET="${SRVLAKEHOUSE_USER}@${REMOTE_HOST}"
+          SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+
+          sshpass -p "$SRVLAKEHOUSE_PASSWORD" ssh $SSH_OPTS "$SSH_TARGET" "mkdir -p '$REMOTE_DIR' /opt/extract_osiris_rwd/output"
+
+          for file_name in "${FILES_TO_COPY[@]}"; do
+            local_file="$GITHUB_WORKSPACE/$file_name"
+            remote_file="$REMOTE_DIR/$(basename "$file_name")"
+            [ -f "$local_file" ] || { echo "Erreur: fichier source introuvable: $local_file"; exit 1; }
+            sshpass -p "$SRVLAKEHOUSE_PASSWORD" scp $SSH_OPTS "$local_file" "${SSH_TARGET}:${remote_file}"
+          done
+
       - name: Restart Airflow
         shell: bash
         run: |

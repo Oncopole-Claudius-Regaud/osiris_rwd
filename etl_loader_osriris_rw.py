@@ -15,6 +15,7 @@ from dataset import update_dataset
 from lastnews import load_lastnews
 from opposition import load_opposition
 from relatedpathology import load_relatedpathology
+from riskfactor import load_riskfactor
 
 with DAG(
     dag_id="osrisis_rw_loader",
@@ -48,5 +49,15 @@ with DAG(
         python_callable=load_relatedpathology
     )
 
+    load_riskfactor_task = PythonOperator(
+        task_id="load_riskfactor",
+        python_callable=load_riskfactor
+    )
+
     update_dataset_task >> load_patient_task
-    load_patient_task >> [load_lastnews_task, load_opposition_task, load_relatedpathology_task]
+    load_patient_task >> [
+        load_lastnews_task,
+        load_opposition_task,
+        load_relatedpathology_task,
+        load_riskfactor_task,
+    ]
