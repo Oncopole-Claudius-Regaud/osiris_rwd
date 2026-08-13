@@ -13,9 +13,12 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 try:
-    import fitz  # type: ignore
+    import pymupdf as fitz  # type: ignore
 except ImportError:  # pragma: no cover
-    fitz = None
+    try:
+        import fitz  # type: ignore
+    except ImportError:
+        fitz = None
 
 try:
     from PyPDF2 import PdfReader  # type: ignore
@@ -307,6 +310,21 @@ PATHOGENS = [
     ("Human papillomavirus", re.compile(r"\b(hpv|papillomavirus)\b", re.I)),
     ("HHV-8", re.compile(r"\b(hhv[- ]?8|herpesvirus\s+humain\s+8)\b", re.I)),
 ]
+PATHOGEN_NEGATION_PATTERN = re.compile(
+    r"\b("
+    r"negatif|negative|negatifs|negatives|"
+    r"serologies?\s+[^.;:\n]{0,120}\s+negatives?|"
+    r"absence\s+de|sans|pas\s+de|non\s+retrouve|non\s+detecte"
+    r")\b",
+    re.I,
+)
+
+
+def is_negated_pathogen_context(text: str, start: int, end: int) -> bool:
+    left = max(0, start - 120)
+    right = min(len(text), end + 120)
+    context = text[left:right]
+    return bool(PATHOGEN_NEGATION_PATTERN.search(context))
 
 
 def extract_hits_for_document(patientid: str, pdf: Path, source_date: Optional[str], raw_text: str) -> list[RiskFactorHit]:
@@ -359,7 +377,19 @@ def extract_hits_for_document(patientid: str, pdf: Path, source_date: Optional[s
     for pathogen, pattern in PATHOGENS:
         match = pattern.search(text)
         if match:
-            hits.append(hit(patientid, RISK_INFECTION, True, pathogen, pdf, source_date, snippet(text, match.start(), match.end())))
+            value = not is_negated_pathogen_context(text, match.start(), match.end())
+            hits.append(
+                hit(
+                    patientid,
+                    RISK_INFECTION,
+                    value,
+                    pathogen,
+                    pdf,
+                    source_date,
+                    snippet(text, match.start(), match.end()),
+                    "regex_negated" if not value else "regex",
+                )
+            )
 
     return hits
 
