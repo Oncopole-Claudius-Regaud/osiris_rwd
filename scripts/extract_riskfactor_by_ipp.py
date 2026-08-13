@@ -301,7 +301,7 @@ def riskfactor_scope(raw_text: str) -> str:
 
 
 TOBACCO_POSITIVE = [
-    re.compile(r"\b(ancien(?:ne)?\s+fumeur|ex[- ]?fumeur|tabagisme\s+(?:actif|sevre|ancien)|fumeur|fumeuse|paquet[s]?[- ]?annee[s]?)\b", re.I),
+    re.compile(r"\b(ancien(?:ne)?\s+fumeur|ex[- ]?fumeur|tabagisme\s+(?:actif|sevre|ancien)|tabac\s*:\s*sevrage|sevrage\s+tabagique|arret\s+du\s+tabac|fumeur|fumeuse|paquet[s]?[- ]?annee[s]?)\b", re.I),
 ]
 TOBACCO_NEGATIVE = [
     re.compile(r"\b(pas\s+de\s+tabagisme|non\s+fumeur|non\s+fumeuse|absence\s+de\s+tabagisme|n'a\s+jamais\s+fume)\b", re.I),
@@ -323,7 +323,7 @@ BMI_PATTERN = re.compile(
     re.I,
 )
 HORMONES_POSITIVE = [
-    re.compile(r"\b(contraception\s+hormonale|pilule|traitement\s+hormonal|hormonotherapie\s+substitutive|ths|estrogene|progestatif)\b", re.I),
+    re.compile(r"\b(contraception\s+hormonale|contraception\s+orale|pilule|traitement\s+hormonal|hormonotherapie\s+substitutive|estrogene|progestatif)\b", re.I),
 ]
 HORMONES_NEGATIVE = [
     re.compile(r"\b(pas\s+de\s+contraception\s+hormonale|absence\s+de\s+traitement\s+hormonal|pas\s+de\s+ths)\b", re.I),
