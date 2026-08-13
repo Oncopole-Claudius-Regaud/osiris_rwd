@@ -22,6 +22,7 @@ REMOTE_SOURCE_DIR = "/opt/PDF"
 REMOTE_OUTPUT_DIR = f"{REMOTE_BASE_DIR}/output"
 REMOTE_JSONL_NAME = "riskfactor_results.jsonl"
 LOCAL_RESULT_PATH = "/tmp/etl_iris/riskfactor_results.jsonl"
+RISK_INFECTION = "Agents infectieux oncogènes"
 
 
 def get_ssh_client():
@@ -216,6 +217,18 @@ def upsert_riskfactor(cur, columns: set[str], row: dict) -> None:
         cur.execute(insert_sql, (patientid, risk_type, risk_value, patientid, risk_type))
 
 
+def delete_generated_infection_riskfactor(cur, patientids: list[str]) -> int:
+    cur.execute(
+        """
+        DELETE FROM osiris_rwd.riskfactor
+        WHERE riskfactortype = %s
+          AND patientid = ANY(%s)
+        """,
+        (RISK_INFECTION, patientids),
+    )
+    return cur.rowcount
+
+
 def load_riskfactor():
     hook = PostgresHook(postgres_conn_id="postgres_test")
     conn = hook.get_conn()
@@ -230,6 +243,7 @@ def load_riskfactor():
         if not columns:
             raise RuntimeError("Table osiris_rwd.riskfactor introuvable")
 
+        deleted_infection = delete_generated_infection_riskfactor(cur, patientids)
         loaded = 0
         with open(result_path, "r", encoding="utf-8") as handle:
             for line in handle:
@@ -239,7 +253,11 @@ def load_riskfactor():
                 loaded += 1
 
         conn.commit()
-        print(f"RiskFactor rows processed: {loaded} at {datetime.utcnow().isoformat()}")
+        print(
+            "RiskFactor rows processed: "
+            f"{loaded}; infection rows refreshed: {deleted_infection} deleted "
+            f"at {datetime.utcnow().isoformat()}"
+        )
     except Exception:
         conn.rollback()
         raise

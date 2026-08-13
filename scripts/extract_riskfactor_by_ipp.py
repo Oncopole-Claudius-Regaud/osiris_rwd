@@ -84,6 +84,13 @@ def normalize_text(value: str) -> str:
     return value.strip()
 
 
+def normalize_lines(value: str) -> str:
+    value = strip_accents(value)
+    value = value.replace("â€™", "'").replace("`", "'").replace("\r", "\n")
+    lines = [re.sub(r"[ \t]+", " ", line).strip() for line in value.splitlines()]
+    return "\n".join(lines)
+
+
 def load_ipps(path: Path) -> set[str]:
     raw = path.read_text(encoding="utf-8", errors="replace").strip()
     if not raw:
@@ -159,7 +166,8 @@ def is_consultation_document(metadata: dict) -> bool:
         r"anapath|anatomopath|histolog|cytolog|"
         r"ordonnance|certificat|anesthesie|consentement|"
         r"operatoire|bloc|dmi|scanner|irm|tepscan|tep|imagerie|"
-        r"radiologie|echographie|medecine\s+nucleaire|rcp"
+        r"radiologie|echographie|medecine\s+nucleaire|rcp|"
+        r"lettre\s+de\s+liaison|hospitalisation|hdj|hco"
         r")\b",
         haystack,
     ):
@@ -235,11 +243,49 @@ RISK_SECTION_STOP = re.compile(
 )
 
 
+# Text is accent-stripped before these regexes run. These stricter patterns keep
+# matches inside clinical sections and handle headings with content on same line.
+RISK_SECTION_START = re.compile(
+    r"(?im)^[ \t]*("
+    r"antecedents?(?![^\n]{0,80}famil)"
+    r"(?:[ \t]+(?:medicaux|chirurgicaux|personnels|gynecologiques|obstetricaux|notables))*|"
+    r"comorbidites?|"
+    r"facteurs?[ \t]+de[ \t]+risques?|"
+    r"mode[ \t]+de[ \t]+vie"
+    r")[ \t]*[:：]?[ \t]*"
+)
+RISK_SECTION_STOP = re.compile(
+    r"(?im)^[ \t]*("
+    r"antecedents?[ \t]+(?:oncologiques?[ \t]+)?familiaux|"
+    r"familiaux|histoire[ \t]+familiale|"
+    r"allergies?|traitements?[ \t]+en[ \t]+cours|examen[ \t]+clinique|"
+    r"histoire[ \t]+de[ \t]+la[ \t]+maladie|conclusion|synthese|prise[ \t]+en[ \t]+charge"
+    r")[ \t]*[:：]?[ \t]*"
+)
+REPORT_BODY_MARKER = re.compile(
+    r"(?im)^[ \t]*("
+    r"compte[ -]?rendu|"
+    r"chere?[ \t]+consoeur|cher[ \t]+confrere|"
+    r"j[' ]ai[ \t]+vu|"
+    r"motif[ \t]+de[ \t]+venue|"
+    r"antecedents?|comorbidites?|facteurs?[ \t]+de[ \t]+risques?|mode[ \t]+de[ \t]+vie"
+    r")\b"
+)
+
+
+def clinical_body_text(raw_text: str) -> str:
+    normalized = normalize_lines(raw_text)
+    marker = REPORT_BODY_MARKER.search(normalized)
+    if not marker:
+        return normalized
+    return normalized[marker.start() :]
+
+
 def riskfactor_scope(raw_text: str) -> str:
-    normalized = normalize_text(raw_text.replace("\r", "\n"))
+    normalized = clinical_body_text(raw_text)
     starts = list(RISK_SECTION_START.finditer(normalized))
     if not starts:
-        return raw_text
+        return ""
 
     chunks: list[str] = []
     for index, start_match in enumerate(starts):
@@ -251,7 +297,7 @@ def riskfactor_scope(raw_text: str) -> str:
         if chunk:
             chunks.append(chunk)
 
-    return "\n".join(chunks) if chunks else raw_text
+    return "\n".join(chunks)
 
 
 TOBACCO_POSITIVE = [
@@ -327,7 +373,13 @@ def is_negated_pathogen_context(text: str, start: int, end: int) -> bool:
     return bool(PATHOGEN_NEGATION_PATTERN.search(context))
 
 
-def extract_hits_for_document(patientid: str, pdf: Path, source_date: Optional[str], raw_text: str) -> list[RiskFactorHit]:
+def extract_hits_for_document(
+    patientid: str,
+    pdf: Path,
+    source_date: Optional[str],
+    raw_text: str,
+    include_negated_pathogens: bool = False,
+) -> list[RiskFactorHit]:
     text = normalize_text(riskfactor_scope(raw_text))
     hits: list[RiskFactorHit] = []
 
@@ -378,6 +430,8 @@ def extract_hits_for_document(patientid: str, pdf: Path, source_date: Optional[s
         match = pattern.search(text)
         if match:
             value = not is_negated_pathogen_context(text, match.start(), match.end())
+            if not value and not include_negated_pathogens:
+                continue
             hits.append(
                 hit(
                     patientid,

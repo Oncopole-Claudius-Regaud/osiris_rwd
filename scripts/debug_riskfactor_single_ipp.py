@@ -69,9 +69,15 @@ def main() -> int:
 
             scope = riskfactor_scope(text)
             if args.show_scope:
-                print(f"  scope={compact(scope)}")
+                print(f"  scope={compact(scope) if scope else '<NO_RISK_SECTION>'}")
 
-            hits = extract_hits_for_document(args.ipp, pdf_path, metadata_date(metadata), text)
+            hits = extract_hits_for_document(
+                args.ipp,
+                pdf_path,
+                metadata_date(metadata),
+                text,
+                include_negated_pathogens=True,
+            )
             if not hits:
                 print("  no_match")
                 continue
