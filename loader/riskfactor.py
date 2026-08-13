@@ -15,7 +15,7 @@ from airflow.providers.postgres.hooks.postgres import PostgresHook
 REMOTE_HOST = "srvlakehouse"
 REMOTE_PORT = 22
 REMOTE_USER = "administrateur"
-SSH_PASSWORD_VAR_KEY = "password_clidatadsin"
+SSH_PASSWORD_VAR_KEY = "password_serverlakehouse"
 REMOTE_BASE_DIR = "/opt/extract_osiris_rwd"
 REMOTE_SCRIPT = f"{REMOTE_BASE_DIR}/scripts/extract_riskfactor_by_ipp.py"
 REMOTE_SOURCE_DIR = "/opt/PDF"
