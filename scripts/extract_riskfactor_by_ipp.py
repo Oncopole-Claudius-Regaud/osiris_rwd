@@ -218,6 +218,39 @@ def first_match(patterns: Iterable[re.Pattern], text: str) -> Optional[re.Match]
     return min(matches, key=lambda match: match.start())
 
 
+RISK_SECTION_START = re.compile(
+    r"(?im)^\s*(ant[ée]c[ée]dents?|comorbidit[ée]s?|facteurs?\s+de\s+risques?|mode\s+de\s+vie)\s*[:：]?\s*$"
+)
+RISK_SECTION_STOP = re.compile(
+    r"(?im)^\s*("
+    r"ant[ée]c[ée]dents?\s+(?:oncologiques?\s+)?familiaux|"
+    r"ant[ée]c[ée]dents?\s+familiaux|"
+    r"familiaux|histoire\s+familiale|"
+    r"allergies?|traitements?\s+en\s+cours|examen\s+clinique|"
+    r"histoire\s+de\s+la\s+maladie|conclusion|synth[èe]se|prise\s+en\s+charge"
+    r")\s*[:：]?\s*$"
+)
+
+
+def riskfactor_scope(raw_text: str) -> str:
+    normalized = normalize_text(raw_text.replace("\r", "\n"))
+    starts = list(RISK_SECTION_START.finditer(normalized))
+    if not starts:
+        return raw_text
+
+    chunks: list[str] = []
+    for index, start_match in enumerate(starts):
+        start = start_match.end()
+        next_start = starts[index + 1].start() if index + 1 < len(starts) else len(normalized)
+        stop_match = RISK_SECTION_STOP.search(normalized, start, next_start)
+        end = stop_match.start() if stop_match else next_start
+        chunk = normalized[start:end].strip()
+        if chunk:
+            chunks.append(chunk)
+
+    return "\n".join(chunks) if chunks else raw_text
+
+
 TOBACCO_POSITIVE = [
     re.compile(r"\b(ancien(?:ne)?\s+fumeur|ex[- ]?fumeur|tabagisme\s+(?:actif|sevre|ancien)|fumeur|fumeuse|paquet[s]?[- ]?annee[s]?)\b", re.I),
 ]
@@ -277,7 +310,7 @@ PATHOGENS = [
 
 
 def extract_hits_for_document(patientid: str, pdf: Path, source_date: Optional[str], raw_text: str) -> list[RiskFactorHit]:
-    text = normalize_text(raw_text)
+    text = normalize_text(riskfactor_scope(raw_text))
     hits: list[RiskFactorHit] = []
 
     checks = [
