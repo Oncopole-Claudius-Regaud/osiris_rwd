@@ -151,10 +151,23 @@ def document_fields(metadata: dict) -> tuple[str, str, str]:
 def is_consultation_document(metadata: dict) -> bool:
     type_desc, format_desc, prescription_desc = document_fields(metadata)
     haystack = normalize_text(" | ".join([type_desc, format_desc, prescription_desc])).lower()
-    if re.search(r"\b(anapath|anatomopath|histolog|cytolog|ordonnance|certificat|anesthesie|consentement)\b", haystack):
+    if re.search(
+        r"\b("
+        r"anapath|anatomopath|histolog|cytolog|"
+        r"ordonnance|certificat|anesthesie|consentement|"
+        r"operatoire|bloc|dmi|scanner|irm|tepscan|tep|imagerie|"
+        r"radiologie|echographie|medecine\s+nucleaire|rcp"
+        r")\b",
+        haystack,
+    ):
         return False
     return bool(
-        re.search(r"\bconsultation\b", haystack)
+        re.search(r"\bcompte\s+rendu\s+de\s+consultation\b", haystack)
+        or re.search(r"\bcr\s+ou\s+fiche\s+de\s+consultation\s+ou\s+de\s+visite\b", haystack)
+        or re.search(r"\bcs\s+", haystack)
+        or re.search(r"\biuct[.]crcssur\b", haystack)
+        or re.search(r"\biuct[.]crcsnv\b", haystack)
+        or re.search(r"\bconsultation\b", haystack)
         or re.search(r"\bcr\s+consult", haystack)
         or re.search(r"\bcompte\s+rendu\s+de\s+consult", haystack)
     )

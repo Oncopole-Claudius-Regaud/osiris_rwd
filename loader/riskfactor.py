@@ -110,6 +110,12 @@ def remote_run_extract(patientids: list[str]) -> str:
         stdout_txt = stdout.read().decode("utf-8", errors="replace")
         stderr_txt = stderr.read().decode("utf-8", errors="replace")
         exit_status = stdout.channel.recv_exit_status()
+        if stdout_txt.strip():
+            print("RiskFactor remote stdout tail:")
+            print("\n".join(stdout_txt.strip().splitlines()[-30:]))
+        if stderr_txt.strip():
+            print("RiskFactor remote stderr tail:")
+            print("\n".join(stderr_txt.strip().splitlines()[-30:]))
         if exit_status != 0:
             detail = (stderr_txt or stdout_txt).strip()[:2000]
             raise RuntimeError(f"RiskFactor remote extraction failed with code {exit_status}: {detail}")
