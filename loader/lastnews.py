@@ -28,17 +28,6 @@ def split_date(value):
     return parsed.day, parsed.month, parsed.year
 
 
-def map_vitalstatus(value):
-    status = (value or "").strip().upper()
-    if status in ("DECEDE", "DÉCÉDÉ", "DÃ©CÃ©DÃ©", "DÃ‰CÃ‰DÃ‰"):
-        return "Deceased"
-    if status == "VIVANT":
-        return "Alive"
-    if status == "PDV":
-        return "Unknown"
-    return "Unknown"
-
-
 def load_lastnews():
     hook = PostgresHook(postgres_conn_id="postgres_test")
     conn = hook.get_conn()
@@ -48,23 +37,23 @@ def load_lastnews():
         cur.execute("TRUNCATE TABLE osiris_rwd.lastnews")
 
         select_sql = """
-            SELECT DISTINCT ON (src.ipp_ocr)
-                src.ipp_ocr,
-                dnc.date_of_death,
-                dnc.date_derniere_nouvelle,
-                src.statut_vital
-            FROM datamart_oeci_survie.v_statut_vital src
-            LEFT JOIN datamart_oeci_survie.v_date_derniere_nouvelle_combinee dnc
-                ON dnc.ipp_ocr = src.ipp_ocr
-            WHERE EXISTS (
-                SELECT 1
-                FROM osiris_rwd.patient p
-                WHERE p.patientid = src.ipp_ocr
-            )
-            ORDER BY
-                src.ipp_ocr,
-                src.date_diagnostic DESC NULLS LAST,
-                dnc.date_derniere_nouvelle DESC NULLS LAST
+            SELECT
+                p.patientid,
+                dc.date_deces_combinee AS date_of_death,
+                da.derniere_date_admission AS last_visit_date,
+                COALESCE(dc.date_deces_combinee, da.derniere_date_admission) AS last_contact_date,
+                CASE
+                    WHEN dc.date_deces_combinee IS NOT NULL THEN 'Deceased'
+                    WHEN da.derniere_date_admission >= date_trunc('year', CURRENT_DATE)::date
+                     AND da.derniere_date_admission < (date_trunc('year', CURRENT_DATE) + INTERVAL '1 year')::date
+                        THEN 'Alive'
+                    ELSE 'Unknown'
+                END AS vitalstatus
+            FROM osiris_rwd.patient p
+            LEFT JOIN datamart_oeci_survie.v_date_deces_combinee dc
+                ON dc.ipp_ocr = p.patientid
+            LEFT JOIN datamart_oeci_survie.v_derniere_admission da
+                ON da.ipp_ocr = p.patientid
         """
         cur.execute(select_sql)
         rows = cur.fetchall()
@@ -105,14 +94,13 @@ def load_lastnews():
                 vitalstatusupdateyear = EXCLUDED.vitalstatusupdateyear
         """
 
-        for patientid, date_of_death, date_derniere_nouvelle, statut_vital in rows:
+        for patientid, date_of_death, last_visit_date, last_contact_date, vitalstatus in rows:
             if not patientid:
                 continue
 
             death_day, death_month, death_year = split_date(date_of_death)
-            vitalstatus = map_vitalstatus(statut_vital)
-            visit_day, visit_month, visit_year = split_date(date_derniere_nouvelle)
-            contact_day, contact_month, contact_year = split_date(date_derniere_nouvelle)
+            visit_day, visit_month, visit_year = split_date(last_visit_date)
+            contact_day, contact_month, contact_year = split_date(last_contact_date)
 
             cur.execute(
                 insert_sql,
