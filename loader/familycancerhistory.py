@@ -17,11 +17,11 @@ REMOTE_PORT = 22
 REMOTE_USER = "administrateur"
 SSH_PASSWORD_VAR_KEY = "password_serverlakehouse"
 REMOTE_BASE_DIR = "/opt/extract_osiris_rwd"
-REMOTE_SCRIPT = f"{REMOTE_BASE_DIR}/scripts/extract_riskfactor_by_ipp.py"
+REMOTE_SCRIPT = f"{REMOTE_BASE_DIR}/scripts/extract_familycancerhistory_by_ipp.py"
 REMOTE_SOURCE_DIR = "/opt/PDF"
 REMOTE_OUTPUT_DIR = f"{REMOTE_BASE_DIR}/output"
-REMOTE_JSONL_NAME = "riskfactor_results.jsonl"
-LOCAL_RESULT_PATH = "/tmp/etl_iris/riskfactor_results.jsonl"
+REMOTE_JSONL_NAME = "familycancerhistory_results.jsonl"
+LOCAL_RESULT_PATH = "/tmp/etl_iris/familycancerhistory_results.jsonl"
 
 
 def get_ssh_client():
@@ -53,7 +53,7 @@ def get_table_columns(cur) -> set[str]:
         SELECT column_name
         FROM information_schema.columns
         WHERE table_schema = 'osiris_rwd'
-          AND table_name = 'riskfactor'
+          AND table_name = 'familycancerhistory'
         """
     )
     return {row[0].lower() for row in cur.fetchall()}
@@ -68,7 +68,7 @@ def remote_run_extract(patientids: list[str]) -> str:
         with tempfile.NamedTemporaryFile(
             mode="w",
             suffix=".json",
-            prefix="osiris_rwd_riskfactor_ipps_",
+            prefix="osiris_rwd_familycancerhistory_ipps_",
             delete=False,
             encoding="utf-8",
         ) as tmp:
@@ -111,14 +111,14 @@ def remote_run_extract(patientids: list[str]) -> str:
         stderr_txt = stderr.read().decode("utf-8", errors="replace")
         exit_status = stdout.channel.recv_exit_status()
         if stdout_txt.strip():
-            print("RiskFactor remote stdout tail:")
+            print("FamilyCancerHistory remote stdout tail:")
             print("\n".join(stdout_txt.strip().splitlines()[-30:]))
         if stderr_txt.strip():
-            print("RiskFactor remote stderr tail:")
+            print("FamilyCancerHistory remote stderr tail:")
             print("\n".join(stderr_txt.strip().splitlines()[-30:]))
         if exit_status != 0:
             detail = (stderr_txt or stdout_txt).strip()[:2000]
-            raise RuntimeError(f"RiskFactor remote extraction failed with code {exit_status}: {detail}")
+            raise RuntimeError(f"FamilyCancerHistory remote extraction failed with code {exit_status}: {detail}")
 
         Path(LOCAL_RESULT_PATH).parent.mkdir(parents=True, exist_ok=True)
         sftp.get(remote_result_path, LOCAL_RESULT_PATH)
@@ -136,92 +136,39 @@ def remote_run_extract(patientids: list[str]) -> str:
         client.close()
 
 
-def bool_value(value):
-    if value is None:
-        return None
-    if isinstance(value, bool):
-        return value
-    normalized = str(value).strip().lower()
-    if normalized in ("true", "t", "1", "yes", "oui"):
-        return True
-    if normalized in ("false", "f", "0", "no", "non"):
-        return False
-    return None
-
-
-def upsert_riskfactor(cur, columns: set[str], row: dict) -> None:
-    patientid = (row.get("patientid") or "").strip()
-    risk_type = (row.get("riskfactortype") or "").strip()
-    risk_value = bool_value(row.get("riskfactorvalue"))
-    pathogen = (row.get("pathogen") or "").strip() or None
-    if not patientid or not risk_type or risk_value is None:
-        return
-
-    has_pathogen = "pathogen" in columns
-    if has_pathogen:
-        update_sql = """
-            UPDATE osiris_rwd.riskfactor
-            SET riskfactorvalue = CASE
-                    WHEN riskfactorvalue IS TRUE THEN TRUE
-                    ELSE %s
-                END,
-                pathogen = %s
-            WHERE patientid = %s
-              AND riskfactortype = %s
-              AND pathogen IS NOT DISTINCT FROM %s
-        """
-        insert_sql = """
-            INSERT INTO osiris_rwd.riskfactor (
-                patientid,
-                riskfactortype,
-                riskfactorvalue,
-                pathogen
-            )
-            SELECT %s, %s, %s, %s
-            WHERE NOT EXISTS (
-                SELECT 1
-                FROM osiris_rwd.riskfactor
-                WHERE patientid = %s
-                  AND riskfactortype = %s
-                  AND pathogen IS NOT DISTINCT FROM %s
-            )
-        """
-        cur.execute(update_sql, (risk_value, pathogen, patientid, risk_type, pathogen))
-        cur.execute(insert_sql, (patientid, risk_type, risk_value, pathogen, patientid, risk_type, pathogen))
-    else:
-        update_sql = """
-            UPDATE osiris_rwd.riskfactor
-            SET riskfactorvalue = CASE
-                    WHEN riskfactorvalue IS TRUE THEN TRUE
-                    ELSE %s
-                END
-            WHERE patientid = %s
-              AND riskfactortype = %s
-        """
-        insert_sql = """
-            INSERT INTO osiris_rwd.riskfactor (
-                patientid,
-                riskfactortype,
-                riskfactorvalue
-            )
-            SELECT %s, %s, %s
-            WHERE NOT EXISTS (
-                SELECT 1
-                FROM osiris_rwd.riskfactor
-                WHERE patientid = %s
-                  AND riskfactortype = %s
-            )
-        """
-        cur.execute(update_sql, (risk_value, patientid, risk_type))
-        cur.execute(insert_sql, (patientid, risk_type, risk_value, patientid, risk_type))
-
-
-def truncate_riskfactor(cur) -> int:
-    cur.execute("TRUNCATE TABLE osiris_rwd.riskfactor RESTART IDENTITY")
+def truncate_familycancerhistory(cur) -> int:
+    cur.execute("TRUNCATE TABLE osiris_rwd.familycancerhistory RESTART IDENTITY")
     return cur.rowcount
 
 
-def load_riskfactor():
+def insert_familycancerhistory(cur, row: dict) -> None:
+    patientid = (row.get("patientid") or "").strip()
+    topo = (row.get("familycancertopocode") or "").strip()
+    parentage = (row.get("familycancerparentage") or "").strip()
+    if not patientid or not topo or not parentage:
+        return
+
+    cur.execute(
+        """
+        INSERT INTO osiris_rwd.familycancerhistory (
+            patientid,
+            familycancertopocode,
+            familycancerparentage
+        )
+        SELECT %s, %s, %s
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM osiris_rwd.familycancerhistory
+            WHERE patientid = %s
+              AND familycancertopocode = %s
+              AND familycancerparentage = %s
+        )
+        """,
+        (patientid, topo, parentage, patientid, topo, parentage),
+    )
+
+
+def load_familycancerhistory():
     hook = PostgresHook(postgres_conn_id="postgres_test")
     conn = hook.get_conn()
     cur = conn.cursor()
@@ -233,20 +180,20 @@ def load_riskfactor():
         result_path = remote_run_extract(patientids)
         columns = get_table_columns(cur)
         if not columns:
-            raise RuntimeError("Table osiris_rwd.riskfactor introuvable")
+            raise RuntimeError("Table osiris_rwd.familycancerhistory introuvable")
 
-        truncate_riskfactor(cur)
+        truncate_familycancerhistory(cur)
         loaded = 0
         with open(result_path, "r", encoding="utf-8") as handle:
             for line in handle:
                 if not line.strip():
                     continue
-                upsert_riskfactor(cur, columns, json.loads(line))
+                insert_familycancerhistory(cur, json.loads(line))
                 loaded += 1
 
         conn.commit()
         print(
-            "RiskFactor rows processed: "
+            "FamilyCancerHistory rows processed: "
             f"{loaded}; table truncated before load at {datetime.utcnow().isoformat()}"
         )
     except Exception:

@@ -301,13 +301,13 @@ def riskfactor_scope(raw_text: str) -> str:
 
 
 TOBACCO_POSITIVE = [
-    re.compile(r"\b(ancien(?:ne)?\s+fumeur|ex[- ]?fumeur|tabagisme\s+(?:actif|sevre|ancien)|tabac\s*:\s*sevrage|sevrage\s+tabagique|arret\s+du\s+tabac|fumeur|fumeuse|paquet[s]?[- ]?annee[s]?)\b", re.I),
+    re.compile(r"\b(ancien(?:ne)?\s+fumeur|ex[- ]?fumeur|tabagisme\s+(?:actif|sevre|ancien)|tabac\s*:\s*[^.;]{0,80}\b(?:sevrage|sevre|\d+\s*pa\b)|sevrage\s+tabagique|arret\s+du\s+tabac|(?<!non )(?<!non-)fumeur|(?<!non )(?<!non-)fumeuse|paquet[s]?[- ]?annee[s]?)\b", re.I),
 ]
 TOBACCO_NEGATIVE = [
-    re.compile(r"\b(pas\s+de\s+tabagisme|non\s+fumeur|non\s+fumeuse|absence\s+de\s+tabagisme|n'a\s+jamais\s+fume)\b", re.I),
+    re.compile(r"\b(pas\s+de\s+tabagisme|non[- ]fumeur|non[- ]fumeuse|absence\s+de\s+tabagisme|n'a\s+jamais\s+fume)\b", re.I),
 ]
 ALCOHOL_POSITIVE = [
-    re.compile(r"\b(alcoolisme|ethylisme|consommation\s+alcoolique|alcool\s+chronique|sevrage\s+alcool)\b", re.I),
+    re.compile(r"\b(alcoolisme|ethylisme|consommation\s+(?:d[' ]alcool|alcoolique)|alcool\s*:\s*(?:occasionnel|oui|sevre|ancien|quotidien|regulier|modere)|alcool\s+chronique|sevrage\s+alcool)\b", re.I),
 ]
 ALCOHOL_NEGATIVE = [
     re.compile(r"\b(pas\s+d[' ]alcool|absence\s+de\s+consommation\s+alcool|non\s+alcoolique|alcool\s*:\s*(?:non|0))\b", re.I),
@@ -335,13 +335,19 @@ UV_POSITIVE = [
     re.compile(r"\b(exposition\s+solaire|rayonnement\s+solaire|uv|cabine\s+uv|ultraviolet)\b", re.I),
 ]
 UV_NEGATIVE = [
-    re.compile(r"\b(pas\s+d[' ]exposition\s+solaire|absence\s+d[' ]exposition\s+solaire|pas\s+d[' ]uv)\b", re.I),
+    re.compile(r"\b(pas\s+d[' ]exposition\s+solaire|absence\s+d[' ]exposition\s+solaire|sans\s+(?:antecedents?\s+(?:majeurs?\s+)?d[' ])?exposition\s+solaire|pas\s+d[' ]uv)\b", re.I),
 ]
 OCCUPATIONAL_POSITIVE = [
     re.compile(r"\b(exposition\s+professionnelle|amiante|asbestos|poussieres?|solvants?|pesticides?)\b", re.I),
 ]
+OCCUPATIONAL_NEGATIVE = [
+    re.compile(r"\b(pas\s+d[' ]exposition\s+professionnelle|absence\s+d[' ]exposition\s+professionnelle|sans\s+exposition\s+professionnelle)\b", re.I),
+]
 CHEMICAL_POSITIVE = [
     re.compile(r"\b(arsenic|benzene|hydrocarbures?|produits?\s+chimiques?|exposition\s+chimique|solvants?|pesticides?)\b", re.I),
+]
+CHEMICAL_NEGATIVE = [
+    re.compile(r"\b(pas\s+d[' ]exposition\s+(?:chimique|aux\s+produits?\s+chimiques|a\s+l[' ]amiante|aux\s+solvants?|aux\s+pesticides?)|absence\s+d[' ]exposition\s+(?:chimique|aux\s+produits?\s+chimiques|a\s+l[' ]amiante|aux\s+solvants?|aux\s+pesticides?)|sans\s+exposition\s+(?:chimique|aux\s+produits?\s+chimiques|a\s+l[' ]amiante|aux\s+solvants?|aux\s+pesticides?))\b", re.I),
 ]
 PATHOGENS = [
     ("Clonorchis sinensis", re.compile(r"\bclonorchis\s+sinensis\b", re.I)),
@@ -364,6 +370,15 @@ PATHOGEN_NEGATION_PATTERN = re.compile(
     r")\b",
     re.I,
 )
+GENERIC_NEGATION_PATTERN = re.compile(
+    r"\b("
+    r"absence\s+de|sans|pas\s+de|aucun(?:e)?|"
+    r"non\s+retrouve|non\s+detecte|"
+    r"ne\s+[^.;:\n]{0,80}\s+jamais|"
+    r"n[' ]a\s+jamais|n[' ]a\s+pas"
+    r")\b",
+    re.I,
+)
 
 
 def is_negated_pathogen_context(text: str, start: int, end: int) -> bool:
@@ -371,6 +386,13 @@ def is_negated_pathogen_context(text: str, start: int, end: int) -> bool:
     right = min(len(text), end + 120)
     context = text[left:right]
     return bool(PATHOGEN_NEGATION_PATTERN.search(context))
+
+
+def is_negated_context(text: str, start: int, end: int) -> bool:
+    left = max(0, start - 80)
+    right = min(len(text), end + 30)
+    context = text[left:right]
+    return bool(GENERIC_NEGATION_PATTERN.search(context))
 
 
 def extract_hits_for_document(
@@ -395,13 +417,17 @@ def extract_hits_for_document(
         (RISK_RADIATION, RADIATION_POSITIVE, True),
         (RISK_UV, UV_NEGATIVE, False),
         (RISK_UV, UV_POSITIVE, True),
+        (RISK_OCCUPATIONAL, OCCUPATIONAL_NEGATIVE, False),
         (RISK_OCCUPATIONAL, OCCUPATIONAL_POSITIVE, True),
+        (RISK_CHEMICAL, CHEMICAL_NEGATIVE, False),
         (RISK_CHEMICAL, CHEMICAL_POSITIVE, True),
     ]
 
     for risk_type, patterns, value in checks:
         match = first_match(patterns, text)
         if match:
+            if value is True and is_negated_context(text, match.start(), match.end()):
+                continue
             hits.append(hit(patientid, risk_type, value, None, pdf, source_date, snippet(text, match.start(), match.end())))
 
     bmi_match = BMI_PATTERN.search(text)

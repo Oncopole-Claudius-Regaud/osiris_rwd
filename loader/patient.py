@@ -61,6 +61,7 @@ def load():
     conn = hook.get_conn()
     cur = conn.cursor()
     eligible_patientids = get_eligible_patientids(cur)
+    cur.execute("TRUNCATE TABLE osiris_rwd.patient RESTART IDENTITY CASCADE")
 
     gender_mapping = {
         "Masculin": "Male",

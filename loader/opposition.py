@@ -51,6 +51,7 @@ def load_opposition():
     cur = conn.cursor()
 
     patientids = get_loaded_patientids(cur)
+    cur.execute("TRUNCATE TABLE osiris_rwd.opposition RESTART IDENTITY")
 
     sql = """
         INSERT INTO osiris_rwd.opposition (

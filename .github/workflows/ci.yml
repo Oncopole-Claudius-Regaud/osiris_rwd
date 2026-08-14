@@ -95,9 +95,11 @@ jobs:
           REMOTE_DIR="/opt/extract_osiris_rwd/scripts"
           FILES_TO_COPY=(
             "scripts/extract_riskfactor_by_ipp.py"
+            "scripts/extract_familycancerhistory_by_ipp.py"
             "scripts/audit_consultation_document_labels.py"
             "scripts/extract_ipp_pdfs_osiris_rwd.py"
             "scripts/debug_riskfactor_single_ipp.py"
+            "scripts/debug_familycancerhistory_single_ipp.py"
           )
 
           [ -n "${SRVLAKEHOUSE_USER:-}" ] || { echo "Erreur: secret SRVLAKEHOUSE_USER manquant"; exit 1; }

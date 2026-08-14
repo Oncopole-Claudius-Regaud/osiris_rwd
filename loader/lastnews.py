@@ -34,7 +34,7 @@ def load_lastnews():
     cur = conn.cursor()
 
     try:
-        cur.execute("TRUNCATE TABLE osiris_rwd.lastnews")
+        cur.execute("TRUNCATE TABLE osiris_rwd.lastnews RESTART IDENTITY")
 
         select_sql = """
             SELECT
