@@ -229,6 +229,14 @@ def first_match(patterns: Iterable[re.Pattern], text: str) -> Optional[re.Match]
     return min(matches, key=lambda match: match.start())
 
 
+def first_non_negated_match(patterns: Iterable[re.Pattern], text: str) -> Optional[re.Match]:
+    matches = [match for pattern in patterns for match in pattern.finditer(text)]
+    for match in sorted(matches, key=lambda current: current.start()):
+        if not is_negated_context(text, match.start(), match.end()):
+            return match
+    return None
+
+
 RISK_SECTION_START = re.compile(
     r"(?im)^\s*(ant[ée]c[ée]dents?|comorbidit[ée]s?|facteurs?\s+de\s+risques?|mode\s+de\s+vie)\s*[:：]?\s*$"
 )
@@ -338,7 +346,7 @@ UV_NEGATIVE = [
     re.compile(r"\b(pas\s+d[' ]exposition\s+solaire|absence\s+d[' ]exposition\s+solaire|sans\s+(?:antecedents?\s+(?:majeurs?\s+)?d[' ])?exposition\s+solaire|pas\s+d[' ]uv)\b", re.I),
 ]
 OCCUPATIONAL_POSITIVE = [
-    re.compile(r"\b(exposition\s+professionnelle|amiante|asbestos|poussieres?|solvants?|pesticides?)\b", re.I),
+    re.compile(r"\b(exposition\s+professionnelle\s+(?:reguliere|importante|significative|aux?|avec|a\s+des)|amiante|asbestos|poussieres?|solvants?|pesticides?)\b", re.I),
 ]
 OCCUPATIONAL_NEGATIVE = [
     re.compile(r"\b(pas\s+d[' ]exposition\s+professionnelle|absence\s+d[' ]exposition\s+professionnelle|sans\s+exposition\s+professionnelle)\b", re.I),
@@ -347,7 +355,7 @@ CHEMICAL_POSITIVE = [
     re.compile(r"\b(arsenic|benzene|hydrocarbures?|produits?\s+chimiques?|exposition\s+chimique|solvants?|pesticides?)\b", re.I),
 ]
 CHEMICAL_NEGATIVE = [
-    re.compile(r"\b(pas\s+d[' ]exposition\s+(?:chimique|aux\s+produits?\s+chimiques|a\s+l[' ]amiante|aux\s+solvants?|aux\s+pesticides?)|absence\s+d[' ]exposition\s+(?:chimique|aux\s+produits?\s+chimiques|a\s+l[' ]amiante|aux\s+solvants?|aux\s+pesticides?)|sans\s+exposition\s+(?:chimique|aux\s+produits?\s+chimiques|a\s+l[' ]amiante|aux\s+solvants?|aux\s+pesticides?))\b", re.I),
+    re.compile(r"\b(pas\s+d[' ]exposition\s+(?:chimique|aux\s+produits?\s+chimiques|a\s+l[' ]amiante|aux\s+solvants?|aux\s+pesticides?|aux\s+hydrocarbures?|aux\s+pesticides?\s+hydrocarbures?)|absence\s+d[' ]exposition\s+(?:chimique|aux\s+produits?\s+chimiques|a\s+l[' ]amiante|aux\s+solvants?|aux\s+pesticides?|aux\s+hydrocarbures?|aux\s+pesticides?\s+hydrocarbures?)|sans\s+exposition\s+(?:chimique|aux\s+produits?\s+chimiques|a\s+l[' ]amiante|aux\s+solvants?|aux\s+pesticides?|aux\s+hydrocarbures?|aux\s+pesticides?\s+hydrocarbures?))\b", re.I),
 ]
 PATHOGENS = [
     ("Clonorchis sinensis", re.compile(r"\bclonorchis\s+sinensis\b", re.I)),
@@ -372,7 +380,7 @@ PATHOGEN_NEGATION_PATTERN = re.compile(
 )
 GENERIC_NEGATION_PATTERN = re.compile(
     r"\b("
-    r"absence\s+de|sans|pas\s+de|aucun(?:e)?|"
+    r"absence\s+d[' ]|absence\s+de|sans|pas\s+d[' ]|pas\s+de|aucun(?:e)?|"
     r"non\s+retrouve|non\s+detecte|"
     r"ne\s+[^.;:\n]{0,80}\s+jamais|"
     r"n[' ]a\s+jamais|n[' ]a\s+pas"
@@ -389,7 +397,8 @@ def is_negated_pathogen_context(text: str, start: int, end: int) -> bool:
 
 
 def is_negated_context(text: str, start: int, end: int) -> bool:
-    left = max(0, start - 80)
+    sentence_start = max(text.rfind(".", 0, start), text.rfind(";", 0, start), text.rfind("\n", 0, start))
+    left = sentence_start + 1 if sentence_start >= 0 else max(0, start - 160)
     right = min(len(text), end + 30)
     context = text[left:right]
     return bool(GENERIC_NEGATION_PATTERN.search(context))
@@ -424,10 +433,8 @@ def extract_hits_for_document(
     ]
 
     for risk_type, patterns, value in checks:
-        match = first_match(patterns, text)
+        match = first_non_negated_match(patterns, text) if value is True else first_match(patterns, text)
         if match:
-            if value is True and is_negated_context(text, match.start(), match.end()):
-                continue
             hits.append(hit(patientid, risk_type, value, None, pdf, source_date, snippet(text, match.start(), match.end())))
 
     bmi_match = BMI_PATTERN.search(text)
