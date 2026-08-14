@@ -182,6 +182,14 @@ def parentages(sentence: str) -> list[str]:
     return [label for label, pattern in PARENTAGE_PATTERNS if pattern.search(sentence)]
 
 
+def parentage_mentions(sentence: str) -> list[tuple[str, int, int]]:
+    mentions: list[tuple[str, int, int]] = []
+    for label, pattern in PARENTAGE_PATTERNS:
+        for match in pattern.finditer(sentence):
+            mentions.append((label, match.start(), match.end()))
+    return sorted(mentions, key=lambda item: item[1])
+
+
 def topo_codes(sentence: str, section_text: str) -> list[str]:
     found = [code for code, pattern in TOPO_PATTERNS if pattern.search(sentence)]
     if found:
@@ -191,6 +199,34 @@ def topo_codes(sentence: str, section_text: str) -> list[str]:
     ):
         return ["C50"]
     return []
+
+
+def sentence_hits(sentence: str, section: str) -> list[tuple[str, str, str]]:
+    mentions = parentage_mentions(sentence)
+    if not mentions:
+        return []
+
+    hits: list[tuple[str, str, str]] = []
+    for index, (parentage, start, _) in enumerate(mentions):
+        next_start = mentions[index + 1][1] if index + 1 < len(mentions) else len(sentence)
+        cancer_before = [match.start() for match in CANCER_WORD.finditer(sentence, 0, start)]
+        segment_start = cancer_before[-1] if cancer_before else 0
+        next_cancers = [match.start() for match in CANCER_WORD.finditer(sentence, start, next_start)]
+        segment_end = next_cancers[-1] if next_cancers else next_start
+        segment = sentence[segment_start:segment_end].strip(" ,")
+
+        local_codes = topo_codes(segment, section)
+        if not local_codes:
+            before = sentence[max(0, start - 80):start]
+            local_codes = topo_codes(before, section)
+            segment = f"{before} {sentence[start:next_start]}".strip(" ,")
+        if not local_codes:
+            continue
+        if not CANCER_WORD.search(segment) and "C50" not in local_codes:
+            continue
+        for topo in local_codes:
+            hits.append((parentage, topo, segment[:500]))
+    return hits
 
 
 def extract_hits_for_document(
@@ -207,27 +243,18 @@ def extract_hits_for_document(
     for sentence in split_candidates(section):
         if FAMILY_NEGATION.search(sentence):
             continue
-        parents = parentages(sentence)
-        if not parents:
-            continue
-        codes = topo_codes(sentence, section)
-        if not codes:
-            continue
-        if not CANCER_WORD.search(sentence) and "C50" not in codes:
-            continue
-        for parentage in parents:
-            for topo in codes:
-                hits.append(
-                    FamilyCancerHit(
-                        patientid=patientid,
-                        familycancertopocode=topo,
-                        familycancerparentage=parentage,
-                        source_pdf=pdf.name,
-                        source_date=source_date,
-                        matched_text=sentence[:500],
-                        confidence="regex",
-                    )
+        for parentage, topo, matched_text in sentence_hits(sentence, section):
+            hits.append(
+                FamilyCancerHit(
+                    patientid=patientid,
+                    familycancertopocode=topo,
+                    familycancerparentage=parentage,
+                    source_pdf=pdf.name,
+                    source_date=source_date,
+                    matched_text=matched_text,
+                    confidence="regex",
                 )
+            )
     return hits
 
 
