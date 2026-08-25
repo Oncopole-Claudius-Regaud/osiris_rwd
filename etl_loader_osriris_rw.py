@@ -17,6 +17,7 @@ from opposition import load_opposition
 from relatedpathology import load_relatedpathology
 from riskfactor import load_riskfactor
 from familycancerhistory import load_familycancerhistory
+from primarycancer import load_primarycancer
 
 with DAG(
     dag_id="osrisis_rw_loader",
@@ -60,6 +61,11 @@ with DAG(
         python_callable=load_familycancerhistory
     )
 
+    load_primarycancer_task = PythonOperator(
+        task_id="load_primarycancer",
+        python_callable=load_primarycancer
+    )
+
     update_dataset_task >> load_patient_task
     load_patient_task >> [
         load_lastnews_task,
@@ -67,4 +73,5 @@ with DAG(
         load_relatedpathology_task,
         load_riskfactor_task,
         load_familycancerhistory_task,
+        load_primarycancer_task,
     ]
