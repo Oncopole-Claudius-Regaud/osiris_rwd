@@ -18,6 +18,7 @@ from relatedpathology import load_relatedpathology
 from riskfactor import load_riskfactor
 from familycancerhistory import load_familycancerhistory
 from primarycancer import load_primarycancer
+from tnmevent import load_tnmevent
 
 with DAG(
     dag_id="osrisis_rw_loader",
@@ -66,6 +67,11 @@ with DAG(
         python_callable=load_primarycancer
     )
 
+    load_tnmevent_task = PythonOperator(
+        task_id="load_tnmevent",
+        python_callable=load_tnmevent
+    )
+
     update_dataset_task >> load_patient_task
     load_patient_task >> [
         load_lastnews_task,
@@ -75,3 +81,4 @@ with DAG(
         load_familycancerhistory_task,
         load_primarycancer_task,
     ]
+    load_primarycancer_task >> load_tnmevent_task
