@@ -131,7 +131,7 @@ def load_primarycancer():
 
     try:
         patientids = get_loaded_patientids(cur)
-        cur.execute("TRUNCATE TABLE osiris_rwd.primarycancer RESTART IDENTITY")
+        cur.execute("TRUNCATE TABLE osiris_rwd.primarycancer RESTART IDENTITY CASCADE")
 
         rows_by_patient = defaultdict(dict)
         with open(FILE_PATH, "r", encoding="utf-8") as f:
