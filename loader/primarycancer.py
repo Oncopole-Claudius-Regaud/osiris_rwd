@@ -89,8 +89,16 @@ def row_morphology_code(row):
         if MORPHOLOGY_PATTERN.match(direct):
             return direct
 
-    code_4 = only_digits(row.get("code_morph_4") or row.get("morphology_code_4"))
-    code_5 = only_digits(row.get("code_morph_5") or row.get("morphology_behavior"))
+    code_4 = only_digits(
+        row.get("code_morph_4")
+        or row.get("morphology_code_4")
+        or row.get("morphologygroup")
+    )
+    code_5 = only_digits(
+        row.get("code_morph_5")
+        or row.get("morphology_behavior")
+        or row.get("morphologycode")
+    )
     if len(code_4) == 4 and len(code_5) >= 1:
         return f"{code_4}/{code_5[0]}"
 
