@@ -32,7 +32,7 @@ def load_tumorpathoevent():
     cur = conn.cursor()
 
     try:
-        cur.execute("TRUNCATE TABLE osiris_rwd.tumorpathoevent RESTART IDENTITY")
+        cur.execute("TRUNCATE TABLE osiris_rwd.tumorpathoevent RESTART IDENTITY CASCADE")
 
         select_sql = """
             SELECT DISTINCT

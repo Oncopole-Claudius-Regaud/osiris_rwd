@@ -2,7 +2,9 @@ from airflow.providers.postgres.hooks.postgres import PostgresHook
 
 
 def normalize_grade(value):
-    value = (value or "").strip()
+    if value is None:
+        return None
+    value = str(value).strip()
     if not value:
         return None
     lowered = value.lower()
@@ -35,7 +37,7 @@ def load_primarycancergrade():
                 FROM sein.ipp_stade s
                 JOIN osiris_rwd.patient p
                   ON p.patientid = s.ipp
-                WHERE NULLIF(TRIM(s.grade_sbr), '') IS NOT NULL
+                WHERE NULLIF(TRIM(s.grade_sbr::text), '') IS NOT NULL
             )
             SELECT
                 pc.primarycancerid,
