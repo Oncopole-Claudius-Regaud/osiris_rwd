@@ -6,9 +6,12 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
 from airflow.providers.postgres.hooks.postgres import PostgresHook
+from psycopg2.extras import execute_values
 
 
 FILE_PATH = "/tmp/etl_iris/observations.jsonl"
+BATCH_SIZE = 5000
+PROGRESS_EVERY = 100000
 
 
 def parse_date(value):
@@ -58,16 +61,39 @@ def parse_number(value):
         return None
 
 
+def infer_unit(label):
+    if re.search(r"\b(poids|weight)\b", label):
+        return "kg"
+    if re.search(r"\b(taille|height)\b", label):
+        return "m"
+    if re.search(r"\b(imc|bmi|indice de masse corporelle)\b", label):
+        return "kg/m2"
+    if re.search(r"\b(temp|temperature)\b", label):
+        return "C"
+    if re.search(r"\b(saturation|spo2|sao2)\b", label):
+        return "%"
+    if re.search(r"\b(pouls|frequence cardiaque|fc)\b", label):
+        return "/min"
+    if re.search(r"\b(tension|pression arterielle|pa)\b", label):
+        return "mmHg"
+    return None
+
+
 def normalize_measure(row):
     label = " ".join(
         clean_text(row.get(key)) or ""
         for key in ("item_code", "item_libelle", "type_observation", "valeur_libelle")
     ).lower()
+    measuretype = (
+        clean_text(row.get("item_libelle"))
+        or clean_text(row.get("item_code"))
+        or clean_text(row.get("type_observation"))
+    )
     raw_value = row.get("valeur_numerique")
     if raw_value is None:
         raw_value = row.get("valeur_brute")
     value = parse_number(raw_value)
-    if value is None:
+    if value is None or not measuretype:
         return None
 
     if re.search(r"\b(poids|weight)\b", label):
@@ -79,12 +105,20 @@ def normalize_measure(row):
     if re.search(r"\b(imc|bmi|indice de masse corporelle)\b", label):
         return "BMI", value, "kg/m2"
 
-    return None
+    return measuretype, value, infer_unit(label)
 
 
 def get_loaded_patientids(cur):
     cur.execute("SELECT patientid FROM osiris_rwd.patient")
     return {str(row[0]).strip() for row in cur.fetchall() if row[0]}
+
+
+def count_file_lines(path):
+    total = 0
+    with open(path, "rb") as handle:
+        for _ in handle:
+            total += 1
+    return total
 
 
 def load_measure():
@@ -94,7 +128,12 @@ def load_measure():
 
     try:
         patientids = get_loaded_patientids(cur)
+        print(f"Measure load started: patientids={len(patientids)}; source={FILE_PATH}")
         cur.execute("TRUNCATE TABLE osiris_rwd.measure RESTART IDENTITY")
+        print("Measure target truncated")
+
+        total_lines = count_file_lines(FILE_PATH)
+        print(f"Measure source lines: {total_lines}")
 
         insert_sql = """
             INSERT INTO osiris_rwd.measure (
@@ -106,39 +145,37 @@ def load_measure():
                 measuredatemonth,
                 measuredateyear
             )
-            SELECT %s, %s, %s, %s, %s, %s, %s
-            WHERE NOT EXISTS (
-                SELECT 1
-                FROM osiris_rwd.measure
-                WHERE patientid = %s
-                  AND measuretype = %s
-                  AND measurevalue IS NOT DISTINCT FROM %s
-                  AND measureunit IS NOT DISTINCT FROM %s
-                  AND measuredateday IS NOT DISTINCT FROM %s
-                  AND measuredatemonth IS NOT DISTINCT FROM %s
-                  AND measuredateyear IS NOT DISTINCT FROM %s
-            )
+            VALUES %s
         """
 
         inserted = 0
+        processed = 0
+        skipped_not_patient = 0
+        skipped_no_numeric_value = 0
+        skipped_no_date = 0
         seen = set()
+        batch = []
         with open(FILE_PATH, "r", encoding="utf-8") as handle:
             for line in handle:
                 if not line.strip():
                     continue
+                processed += 1
                 row = json.loads(line)
-                patientid = clean_text(row.get("ipp"))
+                patientid = clean_text(row.get("ipp") or row.get("ipp_ocr"))
                 if not patientid or patientid not in patientids:
+                    skipped_not_patient += 1
                     continue
 
                 normalized = normalize_measure(row)
                 if not normalized:
+                    skipped_no_numeric_value += 1
                     continue
                 measuretype, measurevalue, measureunit = normalized
 
                 measure_date = parse_date(row.get("date_observation") or row.get("date_admission"))
                 day, month, year = split_date(measure_date)
                 if not month or not year:
+                    skipped_no_date += 1
                     continue
 
                 key = (patientid, measuretype, str(measurevalue), measureunit, day, month, year)
@@ -146,16 +183,8 @@ def load_measure():
                     continue
                 seen.add(key)
 
-                cur.execute(
-                    insert_sql,
+                batch.append(
                     (
-                        patientid,
-                        measuretype,
-                        measurevalue,
-                        measureunit,
-                        day,
-                        month,
-                        year,
                         patientid,
                         measuretype,
                         measurevalue,
@@ -165,10 +194,31 @@ def load_measure():
                         year,
                     ),
                 )
-                inserted += cur.rowcount
+                if len(batch) >= BATCH_SIZE:
+                    execute_values(cur, insert_sql, batch, page_size=BATCH_SIZE)
+                    inserted += len(batch)
+                    batch.clear()
+
+                if processed % PROGRESS_EVERY == 0:
+                    print(
+                        "Measure progress: "
+                        f"processed={processed}/{total_lines}; inserted={inserted}; "
+                        f"skipped_not_patient={skipped_not_patient}; "
+                        f"skipped_no_numeric_value={skipped_no_numeric_value}; "
+                        f"skipped_no_date={skipped_no_date}"
+                    )
+
+        if batch:
+            execute_values(cur, insert_sql, batch, page_size=BATCH_SIZE)
+            inserted += len(batch)
+            print(f"Measure final batch inserted; inserted={inserted}")
 
         conn.commit()
-        print(f"Measure rows inserted: {inserted}")
+        print(
+            "Measure rows inserted: "
+            f"{inserted}; rows processed: {processed}; skipped_not_patient: {skipped_not_patient}; "
+            f"skipped_no_numeric_value: {skipped_no_numeric_value}; skipped_no_date: {skipped_no_date}"
+        )
     except Exception:
         conn.rollback()
         raise
