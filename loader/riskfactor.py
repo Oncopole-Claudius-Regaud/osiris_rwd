@@ -149,13 +149,13 @@ def bool_value(value):
     return None
 
 
-def upsert_riskfactor(cur, columns: set[str], row: dict) -> None:
+def upsert_riskfactor(cur, columns: set[str], row: dict) -> int:
     patientid = (row.get("patientid") or "").strip()
     risk_type = (row.get("riskfactortype") or "").strip()
     risk_value = bool_value(row.get("riskfactorvalue"))
     pathogen = (row.get("pathogen") or "").strip() or None
     if not patientid or not risk_type or risk_value is None:
-        return
+        return 0
 
     has_pathogen = "pathogen" in columns
     if has_pathogen:
@@ -188,6 +188,7 @@ def upsert_riskfactor(cur, columns: set[str], row: dict) -> None:
         """
         cur.execute(update_sql, (risk_value, pathogen, patientid, risk_type, pathogen))
         cur.execute(insert_sql, (patientid, risk_type, risk_value, pathogen, patientid, risk_type, pathogen))
+        return cur.rowcount
     else:
         update_sql = """
             UPDATE osiris_rwd.riskfactor
@@ -214,6 +215,7 @@ def upsert_riskfactor(cur, columns: set[str], row: dict) -> None:
         """
         cur.execute(update_sql, (risk_value, patientid, risk_type))
         cur.execute(insert_sql, (patientid, risk_type, risk_value, patientid, risk_type))
+        return cur.rowcount
 
 
 def truncate_riskfactor(cur) -> int:
@@ -236,18 +238,19 @@ def load_riskfactor():
             raise RuntimeError("Table osiris_rwd.riskfactor introuvable")
 
         truncate_riskfactor(cur)
-        loaded = 0
+        processed = 0
+        inserted = 0
         with open(result_path, "r", encoding="utf-8") as handle:
             for line in handle:
                 if not line.strip():
                     continue
-                upsert_riskfactor(cur, columns, json.loads(line))
-                loaded += 1
+                inserted += upsert_riskfactor(cur, columns, json.loads(line))
+                processed += 1
 
         conn.commit()
         print(
-            "RiskFactor rows processed: "
-            f"{loaded}; table truncated before load at {datetime.utcnow().isoformat()}"
+            "RiskFactor rows inserted: "
+            f"{inserted}; rows processed: {processed}; table truncated before load at {datetime.utcnow().isoformat()}"
         )
     except Exception:
         conn.rollback()

@@ -77,6 +77,7 @@ def load_opposition():
             opposition = EXCLUDED.opposition;
     """
 
+    inserted = 0
     with open(FILE_PATH, "r", encoding="utf-8") as f:
         for line in f:
             row = json.loads(line)
@@ -109,7 +110,9 @@ def load_opposition():
                     opposition,
                 ),
             )
+            inserted += cur.rowcount
 
     conn.commit()
+    print(f"Opposition rows inserted/updated: {inserted}")
     cur.close()
     conn.close()

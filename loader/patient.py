@@ -92,6 +92,7 @@ def load():
             datasetid = EXCLUDED.datasetid;
     """
 
+    inserted = 0
     with open(FILE_PATH, "r", encoding="utf-8") as f:
         for line in f:
             r = json.loads(line)
@@ -114,7 +115,9 @@ def load():
                     DATASET_ID,
                 ),
             )
+            inserted += cur.rowcount
 
     conn.commit()
+    print(f"Patient rows inserted/updated: {inserted}; eligible patients: {len(eligible_patientids)}")
     cur.close()
     conn.close()

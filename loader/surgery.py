@@ -21,6 +21,15 @@ def parse_date(value):
     if not value:
         return None
 
+    if value.isdigit():
+        timestamp = int(value)
+        if timestamp > 10_000_000_000:
+            timestamp = timestamp / 1000
+        try:
+            return datetime.fromtimestamp(timestamp).date()
+        except (OSError, OverflowError, ValueError):
+            return None
+
     for candidate in (value[:10], value):
         try:
             return date.fromisoformat(candidate)
@@ -46,6 +55,13 @@ def clean_text(value):
         return None
     value = str(value).strip()
     return value or None
+
+
+def first_value(row, *keys):
+    for key in keys:
+        if key in row and row.get(key) is not None:
+            return row.get(key)
+    return None
 
 
 def load_surgery():
@@ -89,17 +105,20 @@ def load_surgery():
                     continue
                 row = json.loads(line)
 
-                patientid = clean_text(row.get("ipp_ocr"))
+                patientid = clean_text(first_value(row, "ipp_ocr", "P_CODE", "p_code"))
                 if not patientid or patientid not in patientids:
                     continue
 
-                surgery_date = parse_date(row.get("dat_deb_reel") or row.get("dat_fin_reel"))
+                surgery_date = parse_date(
+                    first_value(row, "dat_deb_reel", "I_PLANNED_START", "i_planned_start")
+                    or first_value(row, "dat_fin_reel", "I_PLANNED_END", "i_planned_end")
+                )
                 day, month, year = split_date(surgery_date)
                 if not month or not year:
                     continue
 
-                surgerycode = clean_text(row.get("nom_interv"))
-                surgerytype = clean_text(row.get("code_ccam"))
+                surgerycode = clean_text(first_value(row, "nom_interv", "I_LABEL", "i_label"))
+                surgerytype = clean_text(first_value(row, "code_ccam", "IN_CODE", "in_code"))
                 if not surgerycode and not surgerytype:
                     continue
 

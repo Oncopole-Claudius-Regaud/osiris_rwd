@@ -94,6 +94,7 @@ def load_lastnews():
                 vitalstatusupdateyear = EXCLUDED.vitalstatusupdateyear
         """
 
+        inserted = 0
         for patientid, date_of_death, last_visit_date, last_contact_date, vitalstatus in rows:
             if not patientid:
                 continue
@@ -121,8 +122,10 @@ def load_lastnews():
                     update_year,
                 ),
             )
+            inserted += cur.rowcount
 
         conn.commit()
+        print(f"LastNews rows inserted/updated: {inserted}; source rows selected: {len(rows)}")
 
     finally:
         cur.close()

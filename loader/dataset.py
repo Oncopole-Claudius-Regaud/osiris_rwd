@@ -30,7 +30,10 @@ def update_dataset():
 
     today = date.today()
     cursor.execute(update_sql, (ORIGIN_CENTER_ID, today, DATASET_ID))
+    updated = cursor.rowcount
     cursor.execute(insert_sql, (DATASET_ID, ORIGIN_CENTER_ID, today, DATASET_ID))
+    inserted = cursor.rowcount
     conn.commit()
+    print(f"Dataset rows inserted: {inserted}; rows updated: {updated}")
     cursor.close()
     conn.close()

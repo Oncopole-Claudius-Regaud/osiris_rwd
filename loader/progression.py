@@ -190,7 +190,7 @@ def remote_run_extract(patients: list[dict[str, Optional[str]]]) -> str:
         client.close()
 
 
-def insert_progression(cur, row: dict) -> None:
+def insert_progression(cur, row: dict) -> int:
     patientid = (row.get("patientid") or "").strip()
     progressionsource = (row.get("progressionsource") or "").strip() or None
     day = row.get("progressiondateday")
@@ -198,7 +198,7 @@ def insert_progression(cur, row: dict) -> None:
     year = row.get("progressiondateyear")
 
     if not patientid or not progressionsource:
-        return
+        return 0
 
     cur.execute(
         """
@@ -233,6 +233,7 @@ def insert_progression(cur, row: dict) -> None:
             progressionsource,
         ),
     )
+    return cur.rowcount
 
 
 def load_progression():
@@ -247,18 +248,19 @@ def load_progression():
         result_path = remote_run_extract(patients)
         cur.execute("TRUNCATE TABLE osiris_rwd.progression RESTART IDENTITY")
 
-        loaded = 0
+        processed = 0
+        inserted = 0
         with open(result_path, "r", encoding="utf-8") as handle:
             for line in handle:
                 if not line.strip():
                     continue
-                insert_progression(cur, json.loads(line))
-                loaded += 1
+                inserted += insert_progression(cur, json.loads(line))
+                processed += 1
 
         conn.commit()
         print(
-            "Progression rows processed: "
-            f"{loaded}; table truncated before load at {datetime.utcnow().isoformat()}"
+            "Progression rows inserted: "
+            f"{inserted}; rows processed: {processed}; table truncated before load at {datetime.utcnow().isoformat()}"
         )
     except Exception:
         conn.rollback()

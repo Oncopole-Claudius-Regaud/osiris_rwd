@@ -62,6 +62,7 @@ def load_relatedpathology():
         ) DO NOTHING;
     """
 
+    inserted = 0
     seen = set()
     with open(FILE_PATH, "r", encoding="utf-8") as f:
         for line in f:
@@ -84,7 +85,9 @@ def load_relatedpathology():
             seen.add(key)
 
             cur.execute(sql, key)
+            inserted += cur.rowcount
 
     conn.commit()
+    print(f"RelatedPathology rows inserted: {inserted}")
     cur.close()
     conn.close()

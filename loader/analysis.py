@@ -150,7 +150,7 @@ def bool_value(value):
     return None
 
 
-def insert_analysis(cur, row: dict) -> None:
+def insert_analysis(cur, row: dict) -> int:
     patientid = (row.get("patientid") or "").strip()
     analysistype = (row.get("analysistype") or "").strip()
     analysiscode = (row.get("analysiscode") or "").strip() or None
@@ -160,7 +160,7 @@ def insert_analysis(cur, row: dict) -> None:
     year = row.get("analysisdateyear")
 
     if not patientid or not analysistype:
-        return
+        return 0
 
     cur.execute(
         """
@@ -201,6 +201,7 @@ def insert_analysis(cur, row: dict) -> None:
             year,
         ),
     )
+    return cur.rowcount
 
 
 def load_analysis():
@@ -215,18 +216,19 @@ def load_analysis():
         result_path = remote_run_extract(patientids)
         cur.execute("TRUNCATE TABLE osiris_rwd.analysis RESTART IDENTITY")
 
-        loaded = 0
+        processed = 0
+        inserted = 0
         with open(result_path, "r", encoding="utf-8") as handle:
             for line in handle:
                 if not line.strip():
                     continue
-                insert_analysis(cur, json.loads(line))
-                loaded += 1
+                inserted += insert_analysis(cur, json.loads(line))
+                processed += 1
 
         conn.commit()
         print(
-            "Analysis rows processed: "
-            f"{loaded}; table truncated before load at {datetime.utcnow().isoformat()}"
+            "Analysis rows inserted: "
+            f"{inserted}; rows processed: {processed}; table truncated before load at {datetime.utcnow().isoformat()}"
         )
     except Exception:
         conn.rollback()

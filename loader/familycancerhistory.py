@@ -141,12 +141,12 @@ def truncate_familycancerhistory(cur) -> int:
     return cur.rowcount
 
 
-def insert_familycancerhistory(cur, row: dict) -> None:
+def insert_familycancerhistory(cur, row: dict) -> int:
     patientid = (row.get("patientid") or "").strip()
     topo = (row.get("familycancertopocode") or "").strip()
     parentage = (row.get("familycancerparentage") or "").strip()
     if not patientid or not topo or not parentage:
-        return
+        return 0
 
     cur.execute(
         """
@@ -166,6 +166,7 @@ def insert_familycancerhistory(cur, row: dict) -> None:
         """,
         (patientid, topo, parentage, patientid, topo, parentage),
     )
+    return cur.rowcount
 
 
 def load_familycancerhistory():
@@ -183,18 +184,19 @@ def load_familycancerhistory():
             raise RuntimeError("Table osiris_rwd.familycancerhistory introuvable")
 
         truncate_familycancerhistory(cur)
-        loaded = 0
+        processed = 0
+        inserted = 0
         with open(result_path, "r", encoding="utf-8") as handle:
             for line in handle:
                 if not line.strip():
                     continue
-                insert_familycancerhistory(cur, json.loads(line))
-                loaded += 1
+                inserted += insert_familycancerhistory(cur, json.loads(line))
+                processed += 1
 
         conn.commit()
         print(
-            "FamilyCancerHistory rows processed: "
-            f"{loaded}; table truncated before load at {datetime.utcnow().isoformat()}"
+            "FamilyCancerHistory rows inserted: "
+            f"{inserted}; rows processed: {processed}; table truncated before load at {datetime.utcnow().isoformat()}"
         )
     except Exception:
         conn.rollback()
