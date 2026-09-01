@@ -23,6 +23,11 @@ from primarycancerstage import load_primarycancerstage
 from primarycancergrade import load_primarycancergrade
 from tumorpathoevent import load_tumorpathoevent
 from metastasis import load_metastasis
+from analysis import load_analysis
+from surgery import load_surgery
+from progression import load_progression
+from medication import load_medication
+from measure import load_measure
 
 with DAG(
     dag_id="osrisis_rw_loader",
@@ -96,6 +101,31 @@ with DAG(
         python_callable=load_metastasis
     )
 
+    load_analysis_task = PythonOperator(
+        task_id="load_analysis",
+        python_callable=load_analysis
+    )
+
+    load_surgery_task = PythonOperator(
+        task_id="load_surgery",
+        python_callable=load_surgery
+    )
+
+    load_progression_task = PythonOperator(
+        task_id="load_progression",
+        python_callable=load_progression
+    )
+
+    load_medication_task = PythonOperator(
+        task_id="load_medication",
+        python_callable=load_medication
+    )
+
+    load_measure_task = PythonOperator(
+        task_id="load_measure",
+        python_callable=load_measure
+    )
+
     update_dataset_task >> load_patient_task
     load_patient_task >> [
         load_lastnews_task,
@@ -110,3 +140,8 @@ with DAG(
     load_primarycancer_task >> load_primarycancergrade_task
     load_primarycancer_task >> load_tumorpathoevent_task
     load_tumorpathoevent_task >> load_metastasis_task
+    load_patient_task >> load_analysis_task
+    load_patient_task >> load_surgery_task
+    load_patient_task >> load_medication_task
+    load_patient_task >> load_measure_task
+    load_primarycancer_task >> load_progression_task

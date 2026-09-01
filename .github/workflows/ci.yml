@@ -100,6 +100,8 @@ jobs:
             "scripts/extract_ipp_pdfs_osiris_rwd.py"
             "scripts/debug_riskfactor_single_ipp.py"
             "scripts/debug_familycancerhistory_single_ipp.py"
+            "scripts/extract_analysis_by_ipp.py"
+            "scripts/extract_progression_by_ipp.py"
           )
 
           [ -n "${SRVLAKEHOUSE_USER:-}" ] || { echo "Erreur: secret SRVLAKEHOUSE_USER manquant"; exit 1; }
