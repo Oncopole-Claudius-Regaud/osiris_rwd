@@ -8,7 +8,7 @@ from decimal import Decimal, InvalidOperation
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 
 
-FILE_PATH = "/tmp/etl_iris/observation.jsonl"
+FILE_PATH = "/tmp/etl_iris/observations.jsonl"
 
 
 def parse_date(value):
