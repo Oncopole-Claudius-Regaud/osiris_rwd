@@ -101,6 +101,7 @@ jobs:
             "scripts/debug_riskfactor_single_ipp.py"
             "scripts/debug_familycancerhistory_single_ipp.py"
             "scripts/extract_analysis_by_ipp.py"
+            "scripts/debug_analysis_single_ipp.py"
             "scripts/extract_progression_by_ipp.py"
           )
 

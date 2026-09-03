@@ -225,6 +225,18 @@ def document_fields(metadata: dict) -> tuple[str, str, str]:
     )
 
 
+def progression_source_code(metadata: dict, metadata_path: Path) -> str:
+    type_desc, format_desc, prescription_desc = document_fields(metadata)
+    haystack = normalize_text(" | ".join([type_desc, format_desc, prescription_desc, metadata_path.name])).lower()
+    if re.search(r"\b(medecine\s+nucleaire|tep|tepscan|pet\s*scan|scintigraphie)\b", haystack):
+        return "4271000179106"
+    if re.search(r"\b(scanner|irm|radiologie|echographie|imagerie|radio-senologie|radiographie)\b", haystack):
+        return "4201000179104"
+    if re.search(r"\b(laboratoire|biologie|resultats?\s+texte|anapath|anatomopathologie)\b", haystack):
+        return "4241000179101"
+    return "371530004"
+
+
 def is_progression_source_document(metadata: dict, metadata_path: Path) -> bool:
     type_desc, format_desc, prescription_desc = document_fields(metadata)
     haystack = normalize_text(" | ".join([type_desc, format_desc, prescription_desc, metadata_path.name])).lower()
@@ -379,7 +391,7 @@ def iter_progression_hits(source_dir: Path, contexts: dict[str, PatientContext])
                 progressiondateday=day,
                 progressiondatemonth=month,
                 progressiondateyear=year,
-                progressionsource=pdf_path.name,
+                progressionsource=progression_source_code(metadata, metadata_path),
                 source_pdf=pdf_path.name,
                 source_date=doc_date,
                 matched_text=snippet(normalized_text, match.start(), match.end()),

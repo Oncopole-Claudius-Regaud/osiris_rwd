@@ -43,11 +43,8 @@ def load_lastnews():
                 da.derniere_date_admission AS last_visit_date,
                 COALESCE(dc.date_deces_combinee, da.derniere_date_admission) AS last_contact_date,
                 CASE
-                    WHEN dc.date_deces_combinee IS NOT NULL THEN 'Deceased'
-                    WHEN da.derniere_date_admission >= date_trunc('year', CURRENT_DATE)::date
-                     AND da.derniere_date_admission < (date_trunc('year', CURRENT_DATE) + INTERVAL '1 year')::date
-                        THEN 'Alive'
-                    ELSE 'Unknown'
+                    WHEN dc.date_deces_combinee IS NOT NULL THEN '419099009'
+                    ELSE '438949009'
                 END AS vitalstatus
             FROM osiris_rwd.patient p
             LEFT JOIN datamart_oeci_survie.v_date_deces_combinee dc

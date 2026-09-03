@@ -9,6 +9,7 @@ from airflow.providers.postgres.hooks.postgres import PostgresHook
 FILE_PATH = "/tmp/etl_iris/diagnostic.jsonl"
 CIM_CODE_PATTERN = re.compile(r"^[A-Z][0-9]{2}(?:[.]?[0-9A-Z]{1,2})?$", re.I)
 MORPHOLOGY_PATTERN = re.compile(r"^[0-9]{4}/[0-9]$")
+ENCR_DIAGNOSIS_METHODS = {"0", "1", "2", "4", "5", "7", "8", "9"}
 
 
 def parse_date(value):
@@ -68,14 +69,18 @@ def row_diagnosis_date(row):
     )
 
 
-def row_diagnosis_method(row):
+def row_diagnosis_method(row, morphology_code):
     value = (
         row.get("cancerdiagnosismethod")
         or row.get("diagnostic_method")
         or row.get("diagnosis_method")
     )
     value = (value or "").strip()
-    return value or None
+    if value in ENCR_DIAGNOSIS_METHODS:
+        return value
+    if morphology_code:
+        return "7"
+    return "9"
 
 
 def only_digits(value):
@@ -111,25 +116,46 @@ def row_morphology_code(row):
     return None
 
 
+def row_morphology_group(row, morphology_code):
+    if morphology_code:
+        return morphology_code.split("/", 1)[0]
+
+    group = only_digits(row.get("morphologygroup") or row.get("code_morph_4"))
+    if len(group) >= 4:
+        return group[:4]
+    return None
+
+
+def row_topography_code(cim_code):
+    return cim_code
+
+
+def row_topography_group(cim_code):
+    if not cim_code:
+        return None
+    return cim_code.replace(".", "")[:3]
+
+
 def row_laterality(row):
     value = (
         row.get("laterality")
         or row.get("lateralite")
         or row.get("latéralité")
+        or row.get("latÃ©ralitÃ©")
         or ""
     )
     normalized = str(value).strip().lower()
     if not normalized:
         return None
     if normalized in ("left", "gauche", "l", "1"):
-        return "LEFT"
+        return "7771000"
     if normalized in ("right", "droit", "droite", "r", "2"):
-        return "RIGHT"
-    if normalized in ("bilateral", "bilatéral", "bilaterale", "bilateral", "b", "3"):
-        return "BILATERAL"
-    if normalized in ("unknown", "inconnu", "inconnue", "u", "9"):
-        return "UNKNOWN"
-    return "UNKNOWN"
+        return "24028007"
+    if normalized in ("bilateral", "bilatéral", "bilatÃ©ral", "bilaterale", "b", "3"):
+        return "51440002"
+    if normalized in ("not applicable", "non applicable", "na"):
+        return "385432009"
+    return None
 
 
 def load_primarycancer():
@@ -154,8 +180,10 @@ def load_primarycancer():
                 if not code or not diagnosis_date:
                     continue
 
+                morphology_code = row_morphology_code(row)
+                laterality = row_laterality(row)
                 day, month, year = split_date(diagnosis_date)
-                key = (code, day, month, year)
+                key = (code, day, month, year, laterality)
                 rows_by_patient[patientid].setdefault(
                     key,
                     {
@@ -165,9 +193,12 @@ def load_primarycancer():
                         "day": day,
                         "month": month,
                         "year": year,
-                        "method": row_diagnosis_method(row),
-                        "morphologycode": row_morphology_code(row),
-                        "laterality": row_laterality(row),
+                        "method": row_diagnosis_method(row, morphology_code),
+                        "topographygroup": row_topography_group(code),
+                        "topographycode": row_topography_code(code),
+                        "morphologygroup": row_morphology_group(row, morphology_code),
+                        "morphologycode": morphology_code,
+                        "laterality": laterality,
                     },
                 )
 
@@ -195,7 +226,7 @@ def load_primarycancer():
         for patientid in sorted(rows_by_patient):
             rows = sorted(
                 rows_by_patient[patientid].values(),
-                key=lambda item: (item["date"], item["code"]),
+                key=lambda item: (item["date"], item["code"], item["laterality"] or ""),
             )
             for cancer_order, row in enumerate(rows, start=1):
                 cur.execute(
@@ -210,9 +241,9 @@ def load_primarycancer():
                         row["code"],
                         True,
                         True,
-                        None,
-                        None,
-                        "CIM-O-3.2" if row["morphologycode"] else None,
+                        row["topographygroup"],
+                        row["topographycode"],
+                        row["morphologygroup"],
                         row["morphologycode"],
                         row["laterality"],
                     ),

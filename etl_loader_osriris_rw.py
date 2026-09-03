@@ -28,6 +28,7 @@ from surgery import load_surgery
 from progression import load_progression
 from medication import load_medication
 from measure import load_measure
+from radiotherapy import load_radiotherapy
 
 with DAG(
     dag_id="osrisis_rw_loader",
@@ -126,6 +127,11 @@ with DAG(
         python_callable=load_measure
     )
 
+    load_radiotherapy_task = PythonOperator(
+        task_id="load_radiotherapy",
+        python_callable=load_radiotherapy
+    )
+
     update_dataset_task >> load_patient_task
     load_patient_task >> [
         load_lastnews_task,
@@ -144,4 +150,5 @@ with DAG(
     load_patient_task >> load_surgery_task
     load_patient_task >> load_medication_task
     load_patient_task >> load_measure_task
+    load_patient_task >> load_radiotherapy_task
     load_primarycancer_task >> load_progression_task

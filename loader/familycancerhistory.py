@@ -141,10 +141,36 @@ def truncate_familycancerhistory(cur) -> int:
     return cur.rowcount
 
 
+PARENTAGE_SNOMED = {
+    "Mother": "72705000",
+    "Father": "66839005",
+    "Son": "65616008",
+    "Daughter": "66089001",
+    "Grandfather": "34871008",
+    "Grandmother": "113157001",
+    "Grandson": "70578009",
+    "Granddaughter": "44181008",
+    "Brother": "70924004",
+    "Sister": "27733009",
+}
+
+
+def map_parentage(value: str) -> str | None:
+    value = (value or "").strip()
+    if not value:
+        return None
+    if value.isdigit():
+        return value
+    mapped = PARENTAGE_SNOMED.get(value)
+    if mapped:
+        return mapped
+    return None
+
+
 def insert_familycancerhistory(cur, row: dict) -> int:
     patientid = (row.get("patientid") or "").strip()
     topo = (row.get("familycancertopocode") or "").strip()
-    parentage = (row.get("familycancerparentage") or "").strip()
+    parentage = map_parentage(row.get("familycancerparentage") or "")
     if not patientid or not topo or not parentage:
         return 0
 

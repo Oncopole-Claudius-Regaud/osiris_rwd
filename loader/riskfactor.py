@@ -4,6 +4,7 @@ import json
 import os
 import shlex
 import tempfile
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -149,73 +150,86 @@ def bool_value(value):
     return None
 
 
-def upsert_riskfactor(cur, columns: set[str], row: dict) -> int:
+RISK_FACTOR_TYPE_CODES = {
+    "exposition au tabac": "1",
+    "tabac": "1",
+    "consommation d alcool": "2",
+    "alcool": "2",
+    "surpoids et/ou obesite": "3",
+    "surpoids": "3",
+    "obesite": "3",
+    "utilisation d hormones exogenes": "4",
+    "hormones exogenes": "4",
+    "agents infectieux oncogenes": "5",
+    "infection": "5",
+    "radiations ionisantes": "6",
+    "radiation ionisante": "6",
+    "rayonnement solaire uv": "7",
+    "rayonnement solaire": "7",
+    "uv": "7",
+    "expositions professionnelles": "8",
+    "exposition professionnelle": "8",
+    "exposition a certaines substances chimiques": "9",
+    "substances chimiques": "9",
+}
+
+
+def normalize_label(value):
+    normalized = unicodedata.normalize("NFKD", str(value or ""))
+    normalized = "".join(char for char in normalized if not unicodedata.combining(char))
+    normalized = normalized.replace("’", "'").replace("'", " ")
+    normalized = " ".join(normalized.lower().strip().split())
+    return normalized
+
+
+def risk_factor_type_code(value):
+    raw = str(value or "").strip()
+    if raw in {str(number) for number in range(1, 10)}:
+        return raw
+
+    normalized = normalize_label(raw)
+    if normalized in RISK_FACTOR_TYPE_CODES:
+        return RISK_FACTOR_TYPE_CODES[normalized]
+
+    for label, code in RISK_FACTOR_TYPE_CODES.items():
+        if label in normalized:
+            return code
+    return None
+
+
+def upsert_riskfactor(cur, row: dict) -> int:
     patientid = (row.get("patientid") or "").strip()
-    risk_type = (row.get("riskfactortype") or "").strip()
+    risk_type = risk_factor_type_code(row.get("riskfactortype"))
     risk_value = bool_value(row.get("riskfactorvalue"))
-    pathogen = (row.get("pathogen") or "").strip() or None
     if not patientid or not risk_type or risk_value is None:
         return 0
 
-    has_pathogen = "pathogen" in columns
-    if has_pathogen:
-        update_sql = """
-            UPDATE osiris_rwd.riskfactor
-            SET riskfactorvalue = CASE
-                    WHEN riskfactorvalue IS TRUE THEN TRUE
-                    ELSE %s
-                END,
-                pathogen = %s
+    update_sql = """
+        UPDATE osiris_rwd.riskfactor
+        SET riskfactorvalue = CASE
+                WHEN riskfactorvalue IS TRUE THEN TRUE
+                ELSE %s
+            END
+        WHERE patientid = %s
+          AND riskfactortype = %s
+    """
+    insert_sql = """
+        INSERT INTO osiris_rwd.riskfactor (
+            patientid,
+            riskfactortype,
+            riskfactorvalue
+        )
+        SELECT %s, %s, %s
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM osiris_rwd.riskfactor
             WHERE patientid = %s
               AND riskfactortype = %s
-              AND pathogen IS NOT DISTINCT FROM %s
-        """
-        insert_sql = """
-            INSERT INTO osiris_rwd.riskfactor (
-                patientid,
-                riskfactortype,
-                riskfactorvalue,
-                pathogen
-            )
-            SELECT %s, %s, %s, %s
-            WHERE NOT EXISTS (
-                SELECT 1
-                FROM osiris_rwd.riskfactor
-                WHERE patientid = %s
-                  AND riskfactortype = %s
-                  AND pathogen IS NOT DISTINCT FROM %s
-            )
-        """
-        cur.execute(update_sql, (risk_value, pathogen, patientid, risk_type, pathogen))
-        cur.execute(insert_sql, (patientid, risk_type, risk_value, pathogen, patientid, risk_type, pathogen))
-        return cur.rowcount
-    else:
-        update_sql = """
-            UPDATE osiris_rwd.riskfactor
-            SET riskfactorvalue = CASE
-                    WHEN riskfactorvalue IS TRUE THEN TRUE
-                    ELSE %s
-                END
-            WHERE patientid = %s
-              AND riskfactortype = %s
-        """
-        insert_sql = """
-            INSERT INTO osiris_rwd.riskfactor (
-                patientid,
-                riskfactortype,
-                riskfactorvalue
-            )
-            SELECT %s, %s, %s
-            WHERE NOT EXISTS (
-                SELECT 1
-                FROM osiris_rwd.riskfactor
-                WHERE patientid = %s
-                  AND riskfactortype = %s
-            )
-        """
-        cur.execute(update_sql, (risk_value, patientid, risk_type))
-        cur.execute(insert_sql, (patientid, risk_type, risk_value, patientid, risk_type))
-        return cur.rowcount
+        )
+    """
+    cur.execute(update_sql, (risk_value, patientid, risk_type))
+    cur.execute(insert_sql, (patientid, risk_type, risk_value, patientid, risk_type))
+    return cur.rowcount
 
 
 def truncate_riskfactor(cur) -> int:
@@ -233,8 +247,7 @@ def load_riskfactor():
             return
 
         result_path = remote_run_extract(patientids)
-        columns = get_table_columns(cur)
-        if not columns:
+        if not get_table_columns(cur):
             raise RuntimeError("Table osiris_rwd.riskfactor introuvable")
 
         truncate_riskfactor(cur)
@@ -244,7 +257,7 @@ def load_riskfactor():
             for line in handle:
                 if not line.strip():
                     continue
-                inserted += upsert_riskfactor(cur, columns, json.loads(line))
+                inserted += upsert_riskfactor(cur, json.loads(line))
                 processed += 1
 
         conn.commit()
